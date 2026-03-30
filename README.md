@@ -56,6 +56,21 @@ SECRET_BACKEND=env
 RAG_API_KEY=
 ```
 
+Post-start health checks:
+
+```bash
+docker compose ps
+docker compose logs --tail 100
+```
+
+Service health URLs:
+
+- `http://localhost:3001/api/health` - dashboard
+- `http://localhost:8000/health` - RAG service
+- `http://localhost:8001/health` - ingestion service
+- `http://localhost:8002/health` - graph service
+- `http://localhost:8003/health` - intelligence service
+
 ## Documentation
 
 - [English docs index](docs/README.md)
