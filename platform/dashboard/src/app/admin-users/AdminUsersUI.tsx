@@ -143,9 +143,9 @@ export default function AdminUsersUI() {
     <div className="max-w-5xl space-y-6 p-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Admin Users</h1>
+          <h1 className="text-2xl font-bold text-white">Dashboard Users</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Manage dashboard roles for viewer, operator, and admin access.
+            Manage dashboard login accounts. The UUID shown under each username is the user ID.
           </p>
         </div>
         <button
@@ -163,7 +163,7 @@ export default function AdminUsersUI() {
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-white">Create User</h2>
           <p className="mt-1 text-sm text-gray-400">
-            Add a new dashboard account with an initial role and password.
+            Add a new dashboard account with an initial role and password. This does not affect service client IDs.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1.2fr_0.8fr_auto]">

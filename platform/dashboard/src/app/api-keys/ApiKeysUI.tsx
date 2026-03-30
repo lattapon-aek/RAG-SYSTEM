@@ -128,6 +128,7 @@ export default function ApiKeysUI() {
           <h2 className="text-lg font-semibold text-white">Create API Key</h2>
           <p className="mt-1 text-sm text-gray-400">
             Bind the key to a <code>client_id</code> so quota, rate limits, and service-auth lookups bucket correctly.
+            This page is for service client IDs, not dashboard user IDs.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">

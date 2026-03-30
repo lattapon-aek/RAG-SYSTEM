@@ -253,6 +253,16 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
     minRole: 'admin',
     items: [
       {
+        href: '/admin',
+        label: 'Admin Home',
+        minRole: 'admin',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5a1 1 0 01-1-1v-5H10v5a1 1 0 01-1 1H4a1 1 0 01-1-1V11z" />
+          </svg>
+        ),
+      },
+      {
         href: '/settings',
         label: 'Settings',
         minRole: 'admin',
@@ -265,7 +275,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/admin-users',
-        label: 'Users',
+        label: 'Dashboard Users',
         minRole: 'admin',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
