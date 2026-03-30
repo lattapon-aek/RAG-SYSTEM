@@ -97,6 +97,8 @@ If you are learning the system, the shortest path is:
 2. [Requirement](docs/requirement.md) - understand the expected behavior
 3. [Design](docs/design.md) - understand the architecture and boundaries
 4. [Task](docs/task.md) - inspect how the behavior is implemented in code
+5. [Ingestion walkthrough](docs/ingestion-walkthrough.md) - follow one document through the ingest pipeline
+6. [Query walkthrough](docs/query-walkthrough.md) - follow one question through the answer pipeline
 
 ## RAG Glossary
 

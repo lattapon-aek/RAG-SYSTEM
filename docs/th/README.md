@@ -17,6 +17,8 @@
 - [Requirement](requirement.md)
 - [Design](design.md)
 - [Task](task.md)
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
 
 ## System Flow
 
@@ -64,6 +66,13 @@ flowchart LR
 - `citation` คือการอ้างอิง passage หรือแหล่งข้อมูลที่ใช้ตอบ
 - `memory` คือ context ที่เก็บไว้เพื่อใช้ซ้ำ
 - `graph extraction` คือการดึง entity และความสัมพันธ์ออกมาเป็น graph
+
+## Walkthroughs
+
+ถ้าต้องการดู flow แบบทีละขั้น ให้เปิดเอกสารเหล่านี้:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
 
 ## หมายเหตุ
 

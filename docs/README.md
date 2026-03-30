@@ -58,6 +58,13 @@ Reading the flow from top to bottom helps connect the docs to the codebase:
 3. `Design` shows how the services and layers are split
 4. `Task` shows where the behavior lives in code
 
+## Walkthroughs
+
+Use these pages when you want to follow a request step by step through the actual code path:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
+
 ## 10-Minute Reading Plan
 
 If you want a fast walkthrough, spend about 10 minutes in this order:
@@ -79,6 +86,8 @@ If you want a fast walkthrough, spend about 10 minutes in this order:
 - [Requirement](requirement.md)
 - [Design](design.md)
 - [Task](task.md)
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
 
 ## Thai supplemental docs
 
@@ -87,6 +96,8 @@ If you want a fast walkthrough, spend about 10 minutes in this order:
 - [Requirement - Thai](th/requirement.md)
 - [Design - Thai](th/design.md)
 - [Task - Thai](th/task.md)
+- [Ingestion walkthrough - Thai](th/ingestion-walkthrough.md)
+- [Query walkthrough - Thai](th/query-walkthrough.md)
 
 ## Notes
 
