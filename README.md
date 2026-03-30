@@ -77,6 +77,7 @@ Service health URLs:
 - [English docs index](docs/README.md)
 - [Thai docs index](docs/th/README.md)
 - [Environment](docs/environment.md)
+- MCP-specific environment lives in [platform/mcp-server/.env.example](platform/mcp-server/.env.example)
 - [Requirement](docs/requirement.md) for system behavior
 - [Design](docs/design.md) for service boundaries
 - [Task](docs/task.md) for implementation locations

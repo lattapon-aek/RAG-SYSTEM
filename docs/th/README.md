@@ -128,6 +128,7 @@ flowchart TB
 - [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) - สร้างและลบ profile bucket
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - ดู เพิ่ม และจัดการ memory ของแต่ละ profile
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - จัดการ service key แบบ active key เดียวต่อ client_id
+- [MCP Environment](../platform/mcp-server/.env.example) - config แยกของ MCP server
 
 ## อ่านเรื่องอะไรดี
 

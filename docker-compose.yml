@@ -91,17 +91,10 @@ services:
   mcp-server:
     build: ./platform/mcp-server
     <<: [*default-restart, *resource-light]
+    env_file:
+      - ./platform/mcp-server/.env
     ports:
       - "3000:3000"
-    environment:
-      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8000}
-      - INGESTION_SERVICE_URL=${INGESTION_SERVICE_URL:-http://ingestion-service:8001}
-      - KNOWLEDGE_CONNECTOR_URL=${KNOWLEDGE_CONNECTOR_URL:-http://knowledge-connector:8006}
-      - INTELLIGENCE_SERVICE_URL=${INTELLIGENCE_SERVICE_URL:-http://intelligence-service:8003}
-      - MCP_RAG_SERVICE_API_KEY=${RAG_SERVICE_API_KEY:-}
-      - MCP_INGESTION_SERVICE_API_KEY=${INGESTION_SERVICE_API_KEY:-}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
-      - OTEL_SERVICE_NAME=mcp-server
     networks:
       - rag-network
     logging: *default-logging

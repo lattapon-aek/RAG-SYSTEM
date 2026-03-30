@@ -158,6 +158,7 @@ These pages are useful when you want to understand the operator and admin flows 
 - [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) - create and delete memory profile buckets
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - browse, add, and manage memory entries for a profile
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id
+- [MCP Environment](../platform/mcp-server/.env.example) - isolated runtime config for the separate MCP server
 
 ## 10-Minute Reading Plan
 

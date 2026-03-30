@@ -49,7 +49,7 @@ INGESTION_SERVICE_API_KEY=
 - Most service URLs default to Docker Compose service names.
 - Cloud provider keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `TYPHOON_API_KEY` are optional unless you route traffic to those providers.
 - The repo ships with extensive inline comments in `.env.example`; use that file as the source of truth for the full set of knobs.
-- Docker Compose maps `RAG_SERVICE_API_KEY` and `INGESTION_SERVICE_API_KEY` into the MCP server as `MCP_RAG_SERVICE_API_KEY` and `MCP_INGESTION_SERVICE_API_KEY`.
+- The MCP server has its own isolated env file at `platform/mcp-server/.env`; copy from `platform/mcp-server/.env.example` when you want to run MCP separately from the main RAG stack.
 - Memory profiles are now stored in a dedicated `memory_profiles` table so an admin can create an empty profile before the first memory entry exists.
 - `api_keys` now enforces one active key per `client_id`; revoke the active key before creating a new one for the same client.
 

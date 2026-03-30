@@ -5,22 +5,22 @@
  * Each key counts requests within a 1-minute window and expires after 2 minutes.
  *
  * Config via environment:
- *   RATE_LIMIT_DEFAULT_RPM  — default requests-per-minute (default: 60)
- *   RATE_LIMIT_REDIS_URL    — Redis URL (default: redis://redis:6379/0)
- *   RATE_LIMIT_OVERRIDES    — JSON map of client_id → rpm override
+ *   MCP_RATE_LIMIT_DEFAULT_RPM  — default requests-per-minute (default: 60)
+ *   MCP_RATE_LIMIT_REDIS_URL    — Redis URL (default: redis://redis:6379/0)
+ *   MCP_RATE_LIMIT_OVERRIDES    — JSON map of client_id → rpm override
  *                             e.g. '{"ci-bot": 120, "admin": 0}'  (0 = unlimited)
  */
 
 import Redis from "ioredis";
 
-const REDIS_URL = process.env.RATE_LIMIT_REDIS_URL ?? process.env.REDIS_URL ?? "redis://redis:6379/0";
-const DEFAULT_RPM = parseInt(process.env.RATE_LIMIT_DEFAULT_RPM ?? "60", 10);
+const REDIS_URL = process.env.MCP_RATE_LIMIT_REDIS_URL ?? "redis://redis:6379/0";
+const DEFAULT_RPM = parseInt(process.env.MCP_RATE_LIMIT_DEFAULT_RPM ?? "60", 10);
 const WINDOW_SECONDS = 60;
 
 // Parse per-client overrides once at startup
 const CLIENT_OVERRIDES: Record<string, number> = (() => {
   try {
-    const raw = process.env.RATE_LIMIT_OVERRIDES;
+    const raw = process.env.MCP_RATE_LIMIT_OVERRIDES;
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
