@@ -137,6 +137,12 @@ export default function ChatUI() {
           setProfiles(rows)
           if (rows.length === 1) {
             setSelectedProfileId(rows[0].id)
+            setParams((current) => ({
+              ...current,
+              namespace: rows[0].namespace || 'default',
+              client_id: rows[0].client_id,
+              user_id: rows[0].user_id,
+            }))
           }
         }
       } catch {
@@ -152,6 +158,12 @@ export default function ChatUI() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const profile = profiles.find((item) => item.id === selectedProfileId)
+    if (!profile) return
+    applyProfile(profile)
+  }, [profiles, selectedProfileId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -393,20 +405,9 @@ export default function ChatUI() {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const profile = profiles.find((item) => item.id === selectedProfileId)
-                    if (profile) applyProfile(profile)
-                  }}
-                  disabled={!selectedProfileId || profiles.length === 0}
-                  className="rounded-lg border border-gray-700 px-3 py-1.5 text-[10px] font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Apply
-                </button>
               </div>
               <p className="mt-1 text-[10px] text-gray-600">
-                Admin-managed preset for the Chat page and MCP handoff.
+                Admin-managed preset for the Chat page and MCP handoff. Selection applies immediately.
               </p>
             </div>
             <div>

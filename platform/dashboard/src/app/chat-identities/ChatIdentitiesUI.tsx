@@ -34,6 +34,7 @@ export default function ChatIdentitiesUI() {
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [copiedField, setCopiedField] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const stats = useMemo(() => ({
@@ -131,6 +132,19 @@ export default function ChatIdentitiesUI() {
         ...patch,
       },
     }))
+  }
+
+  async function copyToClipboard(value: string, field: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
+      window.setTimeout(() => {
+        setCopiedField((current) => (current === field ? null : current))
+      }, 1200)
+      setMessage(`Copied ${field}`)
+    } catch {
+      setError(`Failed to copy ${field}`)
+    }
   }
 
   function saveIdentity(id: string) {
@@ -293,7 +307,7 @@ export default function ChatIdentitiesUI() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-gray-800">
-            <div className="grid grid-cols-[1fr_0.8fr_1fr_1fr_1.2fr_0.8fr_0.9fr] gap-4 border-b border-gray-800 bg-gray-950/80 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <div className="grid grid-cols-[1fr_0.8fr_1.1fr_1.1fr_1.2fr_0.8fr_0.9fr] gap-4 border-b border-gray-800 bg-gray-950/80 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
               <span>Name</span>
               <span>Namespace</span>
               <span>Client ID</span>
@@ -312,7 +326,7 @@ export default function ChatIdentitiesUI() {
                   description: item.description ?? '',
                 }
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_0.8fr_1fr_1fr_1.2fr_0.8fr_0.9fr] gap-4 px-4 py-4 text-sm">
+                  <div key={item.id} className="grid grid-cols-[1fr_0.8fr_1.1fr_1.1fr_1.2fr_0.8fr_0.9fr] gap-4 px-4 py-4 text-sm">
                     <input
                       value={draft.name}
                       onChange={(event) => updateDraft(item.id, { name: event.target.value })}
@@ -323,16 +337,34 @@ export default function ChatIdentitiesUI() {
                       onChange={(event) => updateDraft(item.id, { namespace: event.target.value })}
                       className="rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-purple-500"
                     />
-                    <input
-                      value={draft.client_id}
-                      onChange={(event) => updateDraft(item.id, { client_id: event.target.value })}
-                      className="rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-purple-500"
-                    />
-                    <input
-                      value={draft.user_id}
-                      onChange={(event) => updateDraft(item.id, { user_id: event.target.value })}
-                      className="rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-purple-500"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={draft.client_id}
+                        onChange={(event) => updateDraft(item.id, { client_id: event.target.value })}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-purple-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void copyToClipboard(draft.client_id, `client_id for ${item.name}`)}
+                        className="shrink-0 rounded-lg border border-gray-700 px-2.5 py-2 text-[10px] font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800"
+                      >
+                        {copiedField === `client_id for ${item.name}` ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={draft.user_id}
+                        onChange={(event) => updateDraft(item.id, { user_id: event.target.value })}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-purple-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void copyToClipboard(draft.user_id, `user_id for ${item.name}`)}
+                        className="shrink-0 rounded-lg border border-gray-700 px-2.5 py-2 text-[10px] font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800"
+                      >
+                        {copiedField === `user_id for ${item.name}` ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
                     <input
                       value={draft.description}
                       onChange={(event) => updateDraft(item.id, { description: event.target.value })}
