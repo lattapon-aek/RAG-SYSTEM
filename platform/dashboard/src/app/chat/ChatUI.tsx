@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { chatStore, type Message, type ChatSession } from './draftStore'
-import type { ChatIdentityRecord } from '@/types'
 
 interface Citation {
   chunk_id: string
@@ -45,9 +44,9 @@ const DEFAULT_PARAMS: QueryParams = {
 }
 
 const PARAM_DOCS: Record<string, string> = {
-  namespace: 'Namespace(s) to query — comma-separated for multi-namespace (e.g. "hr, legal")',
-  client_id: 'Client ID for quota and rate-limit tracking',
-  user_id: 'User ID for memory context',
+  namespace: 'Knowledge scope to query — comma-separated for multi-namespace (e.g. "hr, legal"). Independent from client_id/user_id.',
+  client_id: 'Caller identity for quota and rate-limit tracking. Not the same as user_id.',
+  user_id: 'End-user identity for memory context. Not the same as client_id.',
   top_k: 'Number of chunks to retrieve from vector store',
   top_n_rerank: 'Number of results after reranking',
   max_context_tokens: 'Max tokens to pass to LLM as context',
@@ -103,8 +102,6 @@ export default function ChatUI() {
   const [showPayload, setShowPayload] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [profiles, setProfiles] = useState<ChatIdentityRecord[]>([])
-  const [selectedProfileId, setSelectedProfileId] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -123,47 +120,6 @@ export default function ChatUI() {
       chatStore.subscribeLoading(null)
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadProfiles() {
-      try {
-        const res = await fetch('/api/chat-identities')
-        const data = await res.json().catch(() => [])
-        if (!res.ok) return
-        if (!cancelled) {
-          const rows = Array.isArray(data) ? (data as ChatIdentityRecord[]) : []
-          setProfiles(rows)
-          if (rows.length === 1) {
-            setSelectedProfileId(rows[0].id)
-            setParams((current) => ({
-              ...current,
-              namespace: rows[0].namespace || 'default',
-              client_id: rows[0].client_id,
-              user_id: rows[0].user_id,
-            }))
-          }
-        }
-      } catch {
-        if (!cancelled) {
-          setProfiles([])
-        }
-      }
-    }
-
-    void loadProfiles()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    const profile = profiles.find((item) => item.id === selectedProfileId)
-    if (!profile) return
-    applyProfile(profile)
-  }, [profiles, selectedProfileId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -189,15 +145,6 @@ export default function ChatUI() {
     p.use_decompose = params.use_decompose
     p.use_graph = params.use_graph
     return p
-  }
-
-  function applyProfile(profile: ChatIdentityRecord) {
-    setParams((current) => ({
-      ...current,
-      namespace: profile.namespace || 'default',
-      client_id: profile.client_id,
-      user_id: profile.user_id,
-    }))
   }
 
   async function send() {
@@ -390,26 +337,6 @@ export default function ChatUI() {
           {/* Context */}
           <div className="px-4 pt-3 pb-2 space-y-2">
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Context</p>
-            <div>
-              <label className="text-[10px] text-gray-600 mb-1 block">Saved profile</label>
-              <div className="flex gap-2">
-                <select
-                  value={selectedProfileId}
-                  onChange={(e) => setSelectedProfileId(e.target.value)}
-                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 focus:border-purple-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none transition-colors"
-                >
-                  <option value="">Select a chat identity…</option>
-                  {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} · {profile.namespace}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="mt-1 text-[10px] text-gray-600">
-                Admin-managed preset for the Chat page and MCP handoff. Selection applies immediately.
-              </p>
-            </div>
             <div>
               <label className="text-[10px] text-gray-600 mb-1 block">Namespace(s)</label>
               <input

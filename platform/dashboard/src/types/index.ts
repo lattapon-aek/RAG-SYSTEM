@@ -93,19 +93,6 @@ export interface ApiKeyRecord {
   revoked_at: string | null
 }
 
-export interface ChatIdentityRecord {
-  id: string
-  name: string
-  description: string | null
-  namespace: string
-  client_id: string
-  user_id: string
-  created_by: string | null
-  created_at: string | null
-  updated_at: string | null
-  revoked_at: string | null
-}
-
 export interface EvaluationSummary {
   faithfulness: number
   answer_relevance: number

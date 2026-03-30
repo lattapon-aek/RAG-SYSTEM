@@ -284,16 +284,6 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
         ),
       },
       {
-        href: '/chat-identities',
-        label: 'Chat Identities',
-        minRole: 'admin',
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5V18a4 4 0 00-5-3.874M17 20H7m10 0v-2c0-.653-.126-1.277-.357-1.848M7 20H2V18a4 4 0 015-3.874M7 20v-2c0-.653.126-1.277.357-1.848m0 0a5.002 5.002 0 019.286 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        ),
-      },
-      {
         href: '/audit-log',
         label: 'Audit Log',
         minRole: 'admin',

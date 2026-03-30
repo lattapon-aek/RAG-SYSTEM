@@ -65,13 +65,14 @@ function sourceLabel(source?: 'runtime' | 'persistent' | 'env' | null, hasOverri
 }
 
 const QUOTA_TABS = [
-  { id: 'client', label: 'Client Lookup' },
+  { id: 'create', label: 'Register Client' },
+  { id: 'lookup', label: 'Lookup Client' },
   { id: 'live', label: 'Live Rate Limits' },
   { id: 'audit', label: 'Config Changes' },
 ]
 
 export default function QuotaUI() {
-  const [activeTab, setActiveTab] = useState('client')
+  const [activeTab, setActiveTab] = useState('create')
 
   const [rateLimit, setRateLimit] = useState<RateLimitStats | null>(null)
   const [rateConfig, setRateConfig] = useState<RateLimitConfigStats | null>(null)
@@ -79,6 +80,12 @@ export default function QuotaUI() {
   const [rateError, setRateError] = useState('')
   // sparkline history: Map<client_id, last-12 request counts>
   const rateHistory = useRef<Map<string, number[]>>(new Map())
+  const [createClientId, setCreateClientId] = useState('')
+  const [createLabel, setCreateLabel] = useState('')
+  const [createdClientKey, setCreatedClientKey] = useState<string | null>(null)
+  const [createError, setCreateError] = useState('')
+  const [createMessage, setCreateMessage] = useState('')
+  const [creatingClient, setCreatingClient] = useState(false)
   const [clientId, setClientId] = useState('')
   const [quota, setQuota] = useState<QuotaStats | null>(null)
   const [quotaError, setQuotaError] = useState('')
@@ -124,6 +131,41 @@ export default function QuotaUI() {
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function createClient() {
+    const normalizedClientId = createClientId.trim()
+    setCreateError('')
+    setCreateMessage('')
+    setCreatedClientKey(null)
+
+    if (!normalizedClientId) {
+      setCreateError('Client ID is required')
+      return
+    }
+
+    setCreatingClient(true)
+    try {
+      const res = await fetch('/api/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: normalizedClientId,
+          label: createLabel.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setCreatedClientKey(data.plaintext_key ?? null)
+      setCreateClientId('')
+      setCreateLabel('')
+      setCreateMessage(`Created client ${data.record?.client_id ?? normalizedClientId}`)
+      await refreshAuditLog()
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create client')
+    } finally {
+      setCreatingClient(false)
+    }
+  }
 
   const suggestedClients = useMemo(
     () => (Array.isArray(rateLimit?.top_clients) ? rateLimit.top_clients : []).map((entry) => entry.client_id),
@@ -266,9 +308,9 @@ export default function QuotaUI() {
 
       {/* ── Header ── */}
       <div className="shrink-0 px-8 pt-6 pb-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white">Quota & Limits</h1>
+        <h1 className="text-2xl font-bold text-white">Client Management</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Persistent per-client quota and RPM overrides with recent admin change history.
+          Register new client IDs separately from lookup, quota, and RPM management. This page is keyed by client_id.
         </p>
       </div>
 
@@ -280,13 +322,71 @@ export default function QuotaUI() {
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
 
+        {/* Register Client tab */}
+        {activeTab === 'create' && (
+          <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Register Client</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Register a new client_id and issue its first DB-backed service key. Use Lookup Client after creation
+                to manage quota and RPM separately.
+              </p>
+            </div>
+
+            {createError && <p className="mb-3 text-sm text-red-400">{createError}</p>}
+            {createMessage && <p className="mb-3 text-sm text-green-400">{createMessage}</p>}
+
+            {createdClientKey && (
+              <div className="mb-4 rounded-xl border border-yellow-700 bg-yellow-900/20 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-yellow-300">Copy This Key Now</p>
+                <p className="mt-2 break-all font-mono text-sm text-white">{createdClientKey}</p>
+                <p className="mt-2 text-xs text-yellow-200/80">
+                  This plaintext key is shown only once. Store it securely.
+                </p>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Client ID
+                </label>
+                <input
+                  value={createClientId}
+                  onChange={(e) => setCreateClientId(e.target.value)}
+                  placeholder="e.g. api-key-01"
+                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Label
+                </label>
+                <input
+                  value={createLabel}
+                  onChange={(e) => setCreateLabel(e.target.value)}
+                  placeholder="Optional label"
+                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-purple-500"
+                />
+              </div>
+              <button
+                onClick={() => void createClient()}
+                disabled={creatingClient}
+                className="rounded-xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creatingClient ? 'Registering…' : 'Register Client'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Client Lookup tab */}
-        {activeTab === 'client' && (
+        {activeTab === 'lookup' && (
           <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
             <div className="mb-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Client Lookup</h2>
               <p className="mt-1 text-xs text-gray-500">
-                Inspect one client and manage both token quota and request-per-minute configuration.
+                Inspect one existing client_id and manage both token quota and request-per-minute configuration.
               </p>
             </div>
 

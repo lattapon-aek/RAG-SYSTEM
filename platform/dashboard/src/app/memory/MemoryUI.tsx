@@ -227,7 +227,9 @@ export default function MemoryUI() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">Memory Manager</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Manage per-user short-term (Redis) and long-term (Postgres) memory</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Manage memory entries by user_id. The user_id is only the lookup key, not a user account record.
+            </p>
           </div>
           <div className="flex gap-2">
             <span className="flex items-center gap-1.5 bg-blue-900/20 border border-blue-700/40 rounded-lg px-3 py-1.5">
@@ -337,7 +339,7 @@ export default function MemoryUI() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-400 block mb-1">User ID</label>
+                    <label className="text-xs text-gray-400 block mb-1">user_id</label>
                     <input
                       value={addUserId}
                       onChange={(e) => setAddUserId(e.target.value)}
@@ -388,7 +390,7 @@ export default function MemoryUI() {
 
           {/* ── Browse Memory ── */}
           <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Browse Memory</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Browse Memory by user_id</p>
 
             {/* User lookup row */}
             <div className="flex gap-2">
@@ -592,7 +594,7 @@ export default function MemoryUI() {
               <svg className="w-10 h-10 mx-auto mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              <p className="text-sm">Enter a User ID above to browse or add memory</p>
+              <p className="text-sm">Enter a user_id above to browse or add memory entries</p>
             </div>
           )}
 

@@ -17,7 +17,6 @@ export const PAGE_ROLE_RULES: Array<[string, DashboardRole]> = [
   ['/audit-log', 'admin'],
   ['/admin-users', 'admin'],
   ['/api-keys', 'admin'],
-  ['/chat-identities', 'admin'],
 ]
 
 export const API_ROLE_RULES: Array<[string, DashboardRole]> = [
@@ -31,7 +30,6 @@ export const API_ROLE_RULES: Array<[string, DashboardRole]> = [
   ['/api/admin-action-log', 'operator'],
   ['/api/admin-users', 'admin'],
   ['/api/api-keys', 'admin'],
-  ['/api/chat-identities', 'viewer'],
   ['/api/knowledge-gaps', 'admin'],
   ['/api/approvals', 'admin'],
   ['/api/self-learning', 'admin'],
