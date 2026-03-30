@@ -109,6 +109,17 @@ If you are learning the system, the shortest path is:
 - `memory` - storing reusable conversational or operational context
 - `graph extraction` - turning text into entities and relationships for graph queries
 
+## Cheat Sheet
+
+If you want the short version of how this repo works, read these parts in order:
+
+1. `Environment` - what must be configured before the stack can boot
+2. `Ingestion service` - how files and text become queued jobs, chunks, embeddings, and graph-ready data
+3. `RAG service` - how a user question becomes retrieval, reranking, grounding, and an answer
+4. `Graph service` - how extracted entities become graph nodes and relationships
+5. `Intelligence service` - how scheduled analysis and feedback loops run in the background
+6. `Dashboard / MCP` - how humans and tools interact with the stack
+
 ## How RAG Flows Through This Repo
 
 The practical learning path is to follow the data flow across services:
