@@ -1,19 +1,24 @@
 # RAG System
 
+[![Release Gate](https://github.com/lattapon-aek/RAG-SYSTEM/actions/workflows/release-gate.yml/badge.svg)](https://github.com/lattapon-aek/RAG-SYSTEM/actions/workflows/release-gate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/Docs-README-blue)](docs/README.md)
-[![Thai Docs](https://img.shields.io/badge/Docs-Thai%20supplemental-lightgrey)](docs/th/README.md)
+[![Docs](https://img.shields.io/badge/Docs-English-blue)](docs/README.md)
+[![Docs TH](https://img.shields.io/badge/Docs-Thai%20supplemental-lightgrey)](docs/th/README.md)
 
 Microservices-based Retrieval Augmented Generation platform for document ingestion, query, graph, intelligence, dashboard, and MCP access.
 
-## Highlights
+## Overview
 
-- Ingestion service with file/text upload, preview, job queue, and versioning
-- RAG query service with retrieval, reranking, memory, caching, and citation support
-- Graph service for entity extraction and graph queries
-- Intelligence service for scheduled analysis and self-learning workflows
-- Next.js dashboard for admin and operator workflows
-- MCP server for programmatic access to the stack
+RAG System is a microservices stack composed of FastAPI services, a Next.js dashboard, and an MCP server.
+
+Core capabilities:
+
+- document ingestion with preview, queueing, and versioning
+- RAG query orchestration with retrieval, reranking, memory, caching, and citations
+- graph extraction and graph querying
+- intelligence jobs for analysis and self-learning
+- admin and operator dashboard
+- MCP-based service access
 
 ## Quick Start
 
@@ -21,31 +26,31 @@ Microservices-based Retrieval Augmented Generation platform for document ingesti
 docker compose up -d --build
 ```
 
-## Main Ports
+Main services:
 
-- `3000` - MCP server
-- `3001` - dashboard
-- `8000` - RAG service
-- `8001` - ingestion service
-- `8002` - graph service
-- `8003` - intelligence service
-- `8004` - ChromaDB
-- `8005` - reranker service
-- `8006` - knowledge connector
+- `ingestion/ingestion-service`
+- `core/rag-service`
+- `core/graph-service`
+- `core/reranker-service`
+- `intelligence/intelligence-service`
+- `platform/dashboard`
+- `platform/mcp-server`
 
 ## Documentation
 
-- [Documentation index](docs/README.md)
-- [Thai documentation index](docs/th/README.md)
+- [English docs index](docs/README.md)
+- [Thai docs index](docs/th/README.md)
+
+Detailed notes are split into:
+
 - [Requirement](docs/requirement.md)
 - [Design](docs/design.md)
 - [Task](docs/task.md)
 
-Thai supplemental docs:
-
-- [Requirement - Thai](docs/th/requirement.md)
-- [Design - Thai](docs/th/design.md)
-- [Task - Thai](docs/th/task.md)
+- Thai supplements:
+  - [Requirement](docs/th/requirement.md)
+  - [Design](docs/th/design.md)
+  - [Task](docs/th/task.md)
 
 ## Repository Layout
 
