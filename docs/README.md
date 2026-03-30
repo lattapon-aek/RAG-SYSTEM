@@ -107,6 +107,28 @@ Reading the flow from top to bottom helps connect the docs to the codebase:
 5. `Ingestion walkthrough` shows how a document becomes searchable
 6. `Query walkthrough` shows how a question becomes an answer
 
+## Reading Graph
+
+```mermaid
+flowchart TB
+    E[Environment] --> R[Requirement]
+    R --> D[Design]
+    D --> T[Task]
+    T --> IW[Ingestion walkthrough]
+    T --> QW[Query walkthrough]
+    E --> SM[Service Map]
+    R --> RM[Requirement-to-walkthrough map]
+    D --> DM[Design-to-walkthrough map]
+```
+
+This is the recommended order for first-time readers:
+
+1. Start with `Environment` to see how the stack boots
+2. Read `Requirement` to understand what the system must do
+3. Read `Design` to understand how the system is split
+4. Read `Task` to connect the architecture to the actual code
+5. Read the walkthroughs to follow concrete request flows
+
 ## Walkthroughs
 
 Use these pages when you want to follow a request step by step through the actual code path:

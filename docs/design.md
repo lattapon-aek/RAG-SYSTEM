@@ -49,3 +49,16 @@ The design layer becomes easier to follow when you trace the live request paths:
 
 - [Ingestion walkthrough](ingestion-walkthrough.md) for the ingestion pipeline and worker flow
 - [Query walkthrough](query-walkthrough.md) for retrieval, reranking, and answer generation
+
+## Design-to-walkthrough map
+
+Use this quick map when you want to jump from an architecture topic to the request flow that exercises it:
+
+| Design topic | Read next |
+|---|---|
+| Layered / hexagonal boundaries | [Ingestion walkthrough](ingestion-walkthrough.md) and [Query walkthrough](query-walkthrough.md) |
+| Service boundaries and data ownership | [Service Map](README.md#service-map) |
+| Ingestion service internals | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| RAG service orchestration | [Query walkthrough](query-walkthrough.md) |
+| Graph and reranker integration | [Query walkthrough](query-walkthrough.md) |
+| Intelligence jobs and background analysis | [Query walkthrough](query-walkthrough.md) |

@@ -51,3 +51,16 @@ stack นี้พึ่งพา:
 
 - [Ingestion walkthrough](ingestion-walkthrough.md) สำหรับ ingestion pipeline และ worker flow
 - [Query walkthrough](query-walkthrough.md) สำหรับ retrieval, reranking และ answer generation
+
+### แผนที่ design ไป walkthrough
+
+ใช้ตารางนี้เมื่ออยากกระโดดจากหัวข้อ architecture ไปยัง flow การทำงานที่เกี่ยวข้อง:
+
+| หัวข้อ design | อ่านต่อ |
+|---|---|
+| Layered / hexagonal boundaries | [Ingestion walkthrough](ingestion-walkthrough.md) และ [Query walkthrough](query-walkthrough.md) |
+| Service boundaries และ data ownership | [Service Map](README.md#service-map) |
+| รายละเอียดภายใน ingestion service | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| การ orchestration ของ RAG service | [Query walkthrough](query-walkthrough.md) |
+| การเชื่อม graph และ reranker | [Query walkthrough](query-walkthrough.md) |
+| งาน intelligence และ background analysis | [Query walkthrough](query-walkthrough.md) |
