@@ -15,7 +15,6 @@ export const PAGE_ROLE_RULES: Array<[string, DashboardRole]> = [
   ['/knowledge-gaps', 'admin'],
   ['/approvals', 'admin'],
   ['/audit-log', 'admin'],
-  ['/admin', 'admin'],
   ['/admin-users', 'admin'],
   ['/api-keys', 'admin'],
 ]
@@ -29,7 +28,6 @@ export const API_ROLE_RULES: Array<[string, DashboardRole]> = [
   ['/api/playground', 'operator'],
   ['/api/memory', 'operator'],
   ['/api/admin-action-log', 'operator'],
-  ['/api/admin', 'admin'],
   ['/api/admin-users', 'admin'],
   ['/api/api-keys', 'admin'],
   ['/api/knowledge-gaps', 'admin'],
