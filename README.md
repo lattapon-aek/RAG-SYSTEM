@@ -1,8 +1,8 @@
 # RAG System
 
-Microservices-based Retrieval Augmented Generation platform for document ingestion, query, graph, intelligence, dashboard, and MCP access.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ระบบ RAG แบบ microservices สำหรับ ingestion, query, graph, intelligence, dashboard และ MCP access
+Microservices-based Retrieval Augmented Generation platform for document ingestion, query, graph, intelligence, dashboard, and MCP access.
 
 ## Highlights
 
@@ -19,7 +19,7 @@ Microservices-based Retrieval Augmented Generation platform for document ingesti
 docker compose up -d --build
 ```
 
-Main ports:
+## Main Ports
 
 - `3000` - MCP server
 - `3001` - dashboard
@@ -33,11 +33,16 @@ Main ports:
 
 ## Documentation
 
-The detailed product and implementation notes are split into bilingual docs:
-
+- [Documentation index](docs/README.md)
 - [Requirement](docs/requirement.md)
 - [Design](docs/design.md)
 - [Task](docs/task.md)
+
+Thai supplemental docs:
+
+- [Requirement - Thai](docs/th/requirement.md)
+- [Design - Thai](docs/th/design.md)
+- [Task - Thai](docs/th/task.md)
 
 ## Repository Layout
 
