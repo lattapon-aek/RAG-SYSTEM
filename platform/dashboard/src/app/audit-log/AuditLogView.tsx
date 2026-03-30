@@ -94,15 +94,15 @@ export default function AuditLogView({ entries }: { entries: AuditLogEntry[] }) 
         </div>
       ) : (
         <>
-          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-xl border border-gray-700 bg-gray-800">
+            <table className="min-w-[880px] w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700 text-xs text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3 text-left">Time</th>
-                  <th className="px-5 py-3 text-left">Action</th>
-                  <th className="px-5 py-3 text-left">Candidate ID</th>
-                  <th className="px-5 py-3 text-left">By</th>
-                  <th className="px-5 py-3 text-left">Notes</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">Time</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">Action</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">Candidate ID</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">By</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
@@ -125,13 +125,13 @@ export default function AuditLogView({ entries }: { entries: AuditLogEntry[] }) 
                         {e.action}
                       </span>
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs text-gray-300">
+                    <td className="px-5 py-3 font-mono text-xs text-gray-300 whitespace-nowrap">
                       {e.candidate_id.slice(0, 8)}…
                     </td>
-                    <td className="px-5 py-3 text-gray-400 text-xs">
+                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">
                       {e.admin_user_id ?? <span className="text-gray-600">system</span>}
                     </td>
-                    <td className="px-5 py-3 text-gray-500 text-xs italic">
+                    <td className="px-5 py-3 text-gray-500 text-xs italic break-words">
                       {e.notes ?? '—'}
                     </td>
                   </tr>

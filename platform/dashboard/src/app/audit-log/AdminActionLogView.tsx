@@ -64,33 +64,35 @@ export default function AdminActionLogView({ entries }: { entries: AdminConfigAu
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-700 bg-gray-800">
-        <div className="grid grid-cols-[1.1fr_0.8fr_1fr_1fr_1.2fr] gap-4 border-b border-gray-700 px-5 py-3 text-xs uppercase tracking-wider text-gray-400">
-          <span>Time</span>
-          <span>Admin</span>
-          <span>Resource</span>
-          <span>Target</span>
-          <span>Action</span>
-        </div>
-        <div className="divide-y divide-gray-700">
-          {filtered.length === 0 ? (
-            <div className="px-5 py-6 text-sm text-gray-400">No admin actions match the current filters.</div>
-          ) : (
-            filtered.map((entry) => (
-              <div key={entry.id} className="grid grid-cols-[1.1fr_0.8fr_1fr_1fr_1.2fr] gap-4 px-5 py-3 text-sm">
-                <span className="text-gray-300">{entry.created_at ? new Date(entry.created_at).toLocaleString() : '—'}</span>
-                <span className="truncate text-white">{entry.admin_user_id ?? 'system'}</span>
-                <span className="uppercase tracking-wide text-purple-300">{entry.resource_type}</span>
-                <span className="truncate font-mono text-gray-200">{entry.target_id}</span>
-                <span className="text-gray-400">
-                  {entry.action}
-                  {entry.after_value?.['limit_value'] !== undefined
-                    ? ` -> ${String(entry.after_value['limit_value'])}`
-                    : ''}
-                </span>
-              </div>
-            ))
-          )}
+      <div className="overflow-x-auto rounded-xl border border-gray-700 bg-gray-800">
+        <div className="min-w-[860px]">
+          <div className="grid grid-cols-[1.1fr_0.8fr_1fr_1fr_1.2fr] gap-4 border-b border-gray-700 px-5 py-3 text-xs uppercase tracking-wider text-gray-400">
+            <span>Time</span>
+            <span>Admin</span>
+            <span>Resource</span>
+            <span>Target</span>
+            <span>Action</span>
+          </div>
+          <div className="divide-y divide-gray-700">
+            {filtered.length === 0 ? (
+              <div className="px-5 py-6 text-sm text-gray-400">No admin actions match the current filters.</div>
+            ) : (
+              filtered.map((entry) => (
+                <div key={entry.id} className="grid grid-cols-[1.1fr_0.8fr_1fr_1fr_1.2fr] gap-4 px-5 py-3 text-sm">
+                  <span className="text-gray-300">{entry.created_at ? new Date(entry.created_at).toLocaleString() : '—'}</span>
+                  <span className="truncate text-white">{entry.admin_user_id ?? 'system'}</span>
+                  <span className="uppercase tracking-wide text-purple-300">{entry.resource_type}</span>
+                  <span className="truncate font-mono text-gray-200">{entry.target_id}</span>
+                  <span className="text-gray-400">
+                    {entry.action}
+                    {entry.after_value?.['limit_value'] !== undefined
+                      ? ` -> ${String(entry.after_value['limit_value'])}`
+                      : ''}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </section>
