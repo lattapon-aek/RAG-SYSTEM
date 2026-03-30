@@ -151,6 +151,14 @@ Use these pages when you want to follow a request step by step through the actua
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
 
+## Admin Surfaces
+
+These pages are useful when you want to understand the operator and admin flows around memory and service keys:
+
+- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) - create an empty memory profile before adding entries
+- [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - browse, add, and manage memory entries for a profile
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id
+
 ## 10-Minute Reading Plan
 
 If you want a fast walkthrough, spend about 10 minutes in this order:

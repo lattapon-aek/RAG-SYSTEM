@@ -38,6 +38,8 @@ If you want to trace the same tasks back to the higher-level docs, read:
 
 - Build the Next.js dashboard
 - Add admin screens for jobs, documents, graph, cache, memory, and approvals
+- Add admin-only memory profile creation
+- Enforce one active service key per client_id in the service key registry
 - Expose MCP clients for service access
 
 ## Evidence in code

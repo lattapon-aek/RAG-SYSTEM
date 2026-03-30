@@ -40,6 +40,8 @@
 
 - สร้าง Next.js dashboard
 - ทำหน้า admin สำหรับ jobs, documents, graph, cache, memory และ approvals
+- เพิ่มหน้า admin สำหรับสร้าง memory profile
+- บังคับให้ service key ของ client_id เดียวมี active key ได้แค่หนึ่งอัน
 - เปิด MCP client สำหรับเรียก service ต่าง ๆ
 
 ### หลักฐานในโค้ด

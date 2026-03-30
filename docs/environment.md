@@ -50,6 +50,8 @@ INGESTION_SERVICE_API_KEY=
 - Cloud provider keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `TYPHOON_API_KEY` are optional unless you route traffic to those providers.
 - The repo ships with extensive inline comments in `.env.example`; use that file as the source of truth for the full set of knobs.
 - Docker Compose maps `RAG_SERVICE_API_KEY` and `INGESTION_SERVICE_API_KEY` into the MCP server as `MCP_RAG_SERVICE_API_KEY` and `MCP_INGESTION_SERVICE_API_KEY`.
+- Memory profiles are now stored in a dedicated `memory_profiles` table so an admin can create an empty profile before the first memory entry exists.
+- `api_keys` now enforces one active key per `client_id`; revoke the active key before creating a new one for the same client.
 
 ## Related docs
 
@@ -59,3 +61,5 @@ If you want to connect environment setup to the rest of the learning path, read:
 - [Requirement](requirement.md) for the system goals behind these variables
 - [Design](design.md) for the service boundaries that consume these variables
 - [Task](task.md) for the implementation areas affected by configuration
+- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) for the admin-only profile creation flow
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) for the active-key-per-client flow

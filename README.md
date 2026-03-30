@@ -77,12 +77,17 @@ Service health URLs:
 - [English docs index](docs/README.md)
 - [Thai docs index](docs/th/README.md)
 - [Environment](docs/environment.md)
+- [Requirement](docs/requirement.md) for system behavior
+- [Design](docs/design.md) for service boundaries
+- [Task](docs/task.md) for implementation locations
 
 Detailed notes are split into:
 
 - [Requirement](docs/requirement.md)
 - [Design](docs/design.md)
 - [Task](docs/task.md)
+- [Create Memory Profile](platform/dashboard/src/app/memory/create/page.tsx) for admin-only profile creation
+- [Service Key Registry](platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) for one-active-key-per-client management
 
 - Thai supplements:
   - [Requirement](docs/th/requirement.md)

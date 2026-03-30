@@ -50,6 +50,8 @@ INGESTION_SERVICE_API_KEY=
 - cloud provider keys เช่น `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, และ `TYPHOON_API_KEY` เป็นตัวเลือกเสริม เว้นแต่คุณ route traffic ไป provider เหล่านั้น
 - ใน `.env.example` มีคอมเมนต์อธิบายไว้เยอะอยู่แล้ว ให้ถือเป็นแหล่งอ้างอิงหลักสำหรับตัวเลือกทั้งหมด
 - Docker Compose จะ map `RAG_SERVICE_API_KEY` และ `INGESTION_SERVICE_API_KEY` เข้า MCP server เป็น `MCP_RAG_SERVICE_API_KEY` และ `MCP_INGESTION_SERVICE_API_KEY`
+- Memory profile ตอนนี้เก็บในตาราง `memory_profiles` แยกต่างหาก เพื่อให้ admin สร้าง profile เปล่าได้ก่อนมี memory entry ตัวแรก
+- ตาราง `api_keys` บังคับให้ `client_id` เดียวมี active key ได้แค่หนึ่งอัน ต้อง revoke key เดิมก่อนสร้างใหม่สำหรับ client เดิม
 
 ## เอกสารที่เกี่ยวข้อง
 
@@ -59,3 +61,5 @@ INGESTION_SERVICE_API_KEY=
 - [Requirement](requirement.md) เพื่อดูเป้าหมายของระบบที่ตัวแปรพวกนี้รองรับ
 - [Design](design.md) เพื่อดู boundary ของ service ที่ใช้ค่าพวกนี้
 - [Task](task.md) เพื่อดูจุดที่ configuration มีผลต่อ implementation
+- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) สำหรับ flow สร้าง profile ของ admin
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) สำหรับ flow service key ที่มี active key เดียวต่อ client

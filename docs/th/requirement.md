@@ -17,6 +17,8 @@
 - รองรับ reranking
 - มี workflow สำหรับ analysis, feedback และ self-learning
 - มี dashboard สำหรับงานปฏิบัติการ
+- มีการสร้าง memory profile แบบ admin-only และจัดการ memory entry แยกจากกัน
+- มี service key registry ที่อนุญาตให้ client_id เดียวมี active key ได้เพียงหนึ่งอัน
 - รองรับการเชื่อมต่อผ่าน MCP สำหรับใช้งานแบบ programmatic
 
 ### หลักฐานในโค้ด
@@ -49,3 +51,5 @@
 | Graph extraction และ graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) และ [Query walkthrough](query-walkthrough.md) |
 | Intelligence workflows และ background analysis | [Query walkthrough](query-walkthrough.md) |
 | Dashboard และ MCP access | [Query walkthrough](query-walkthrough.md) และ [Ingestion walkthrough](ingestion-walkthrough.md) |
+| การสร้าง memory profile และการจัดการ memory | [Query walkthrough](query-walkthrough.md) |
+| Service key registry และ active key ต่อ client_id | [Task](task.md) และ [Environment](environment.md) |

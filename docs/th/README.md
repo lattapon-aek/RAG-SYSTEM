@@ -121,6 +121,14 @@ flowchart TB
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
 
+## Admin Surfaces
+
+หน้าพวกนี้ช่วยให้เข้าใจ flow ฝั่ง admin และ operator ที่เกี่ยวกับ memory กับ service keys:
+
+- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) - สร้าง profile เปล่าก่อนเพิ่ม memory entry
+- [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - ดู เพิ่ม และจัดการ memory ของแต่ละ profile
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - จัดการ service key แบบ active key เดียวต่อ client_id
+
 ## อ่านเรื่องอะไรดี
 
 ถ้ารู้อยู่แล้วว่าอยากเข้าใจเรื่องไหน ให้กระโดดไปหน้าที่ตรงกับเป้าหมายได้เลย:

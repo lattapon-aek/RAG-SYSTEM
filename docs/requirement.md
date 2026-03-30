@@ -15,6 +15,8 @@ This document summarizes the system requirements that are reflected in the curre
 - Reranking support
 - Intelligence workflows for analysis, feedback, and self-learning
 - Admin dashboard for operations
+- Admin-only memory profile creation and memory entry management
+- One active service key per client_id in the key registry
 - MCP access for programmatic integration
 
 ## Evidence in code
@@ -47,3 +49,5 @@ Use this quick map when you want to jump from a requirement to the code path tha
 | Graph extraction and graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) and [Query walkthrough](query-walkthrough.md) |
 | Intelligence workflows and background analysis | [Query walkthrough](query-walkthrough.md) |
 | Dashboard and MCP access | [Query walkthrough](query-walkthrough.md) and [Ingestion walkthrough](ingestion-walkthrough.md) |
+| Memory profile creation and memory management | [Query walkthrough](query-walkthrough.md) |
+| Service key registry and unique active client keys | [Task](task.md) and [Environment](environment.md) |
