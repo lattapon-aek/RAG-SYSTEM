@@ -157,10 +157,23 @@ These pages are useful when you want to understand the operator and admin flows 
 
 - [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) - create and delete memory profile buckets
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - browse, add, and manage memory entries for a profile
-- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id, with each active key unique across the system
 - [MCP Environment](../platform/mcp-server/.env.example) - isolated runtime config for the separate MCP server
 - [MCP Production Env](../platform/mcp-server/.env.production.example) - standalone deployment preset for MCP
 - [MCP Guide](../platform/mcp-server/README.md) - how to run the standalone MCP server on another machine
+
+## MCP Tool Groups
+
+The current MCP server exposes a small set of grouped tools. Read this section when you want the dashboard key page and MCP runtime to line up:
+
+| Group | Tools | Why it matters |
+|---|---|---|
+| RAG query | `rag_query`, `platform_list_namespaces`, `platform_kb_stats` | These are the read-side tools that answer questions and inspect knowledge-base state. |
+| Ingestion | `rag_ingest`, `knowledge_batch_scrape`, `rag_list_documents` | These are the write-side tools that submit content into the ingestion pipeline. |
+| Memory | `memory_get`, `memory_save`, `memory_list`, `memory_delete` | These tools manage profile memory entries. |
+| Feedback | `feedback_submit`, `feedback_stats` | These tools record and inspect feedback signals. |
+
+There is no dedicated approve tool in the current MCP server. If you want to keep the runtime simple, a single service key can be copied into both `MCP_RAG_SERVICE_API_KEY` and `MCP_INGESTION_SERVICE_API_KEY`. If you want stronger separation later, you can rotate them independently.
 
 ## 10-Minute Reading Plan
 

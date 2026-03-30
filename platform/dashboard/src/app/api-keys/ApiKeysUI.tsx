@@ -19,6 +19,29 @@ export default function ApiKeysUI() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
+  const mcpToolGroups = [
+    {
+      title: 'RAG query',
+      tools: ['rag_query', 'platform_list_namespaces', 'platform_kb_stats'],
+      note: 'Read-only access for answering questions, listing namespaces, and checking knowledge-base stats.',
+    },
+    {
+      title: 'Ingestion',
+      tools: ['rag_ingest', 'knowledge_batch_scrape', 'rag_list_documents'],
+      note: 'Used when MCP submits content or URLs into the ingestion queue before human review and ingestion.',
+    },
+    {
+      title: 'Memory',
+      tools: ['memory_get', 'memory_save', 'memory_list', 'memory_delete'],
+      note: 'Used for profile memory lookup, save, listing, and deletion.',
+    },
+    {
+      title: 'Feedback',
+      tools: ['feedback_submit', 'feedback_stats'],
+      note: 'Used for feedback submission and analytics.',
+    },
+  ]
+
   async function loadKeys() {
     setLoading(true)
     setError('')
@@ -101,8 +124,9 @@ export default function ApiKeysUI() {
         <div>
           <h1 className="text-2xl font-bold text-white">Service Key Registry</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Create and revoke DB-backed service keys for client_id. This page is the source of truth for key
-            material, while quota and rate limits live in the Client Report & Limits page.
+            Create and revoke DB-backed service keys for <code>client_id</code>. This page is the source of truth
+            for key material, while quota and rate limits live in the Client Report & Limits page.
+            Each active key is unique across the system, so a plaintext key cannot be active for another client.
           </p>
         </div>
         <button
@@ -120,8 +144,49 @@ export default function ApiKeysUI() {
           <p className="text-xs font-semibold uppercase tracking-wider text-yellow-300">Copy This Key Now</p>
           <p className="mt-2 font-mono text-sm text-white break-all">{createdKey}</p>
           <p className="mt-2 text-xs text-yellow-200/80">This plaintext key is shown only once.</p>
+          <p className="mt-2 text-xs text-yellow-200/80">
+            You can copy the same key into both <code>MCP_RAG_SERVICE_API_KEY</code> and{' '}
+            <code>MCP_INGESTION_SERVICE_API_KEY</code> if you want one shared service secret for MCP.
+          </p>
+          <p className="mt-2 text-xs text-yellow-200/80">
+            The same active key cannot be attached to another <code>client_id</code> until it is revoked.
+          </p>
         </div>
       )}
+
+      <section className="rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-white">How MCP Uses This Key</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            MCP sends this key as <code>X-API-Key</code> when it calls the RAG and ingestion services. The same
+            plaintext key can be reused for both MCP service env vars, or you can rotate them separately if you
+            prefer.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {mcpToolGroups.map((group) => (
+            <div key={group.title} className="rounded-xl border border-cyan-900/50 bg-gray-950/60 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-cyan-200">{group.title}</h3>
+                  <p className="mt-1 text-sm text-gray-300">{group.note}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {group.tools.map((tool) => (
+                  <span key={tool} className="rounded-full border border-gray-700 bg-gray-900 px-2 py-1 font-mono text-xs text-cyan-200">
+                    {tool}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs text-gray-400">
+          Note: the current MCP server does not expose a dedicated approve tool. Ingestion requests go through the
+          ingestion queue, while read-only query tools use the same service-key pattern for authentication.
+        </p>
+      </section>
 
       <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
         <div className="mb-4">
@@ -129,7 +194,7 @@ export default function ApiKeysUI() {
           <p className="mt-1 text-sm text-gray-400">
             Bind the key to a <code>client_id</code>. The same client_id is used by Client Report & Limits for quota
             and rate-limit lookups. This page is for service client IDs, not dashboard user IDs.
-            Only one active key can exist per client_id; revoke the active key before creating a new one.
+            Only one active key can exist per client_id, and an active key cannot be reused by another client_id.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">

@@ -127,10 +127,23 @@ flowchart TB
 
 - [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) - สร้างและลบ profile bucket
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - ดู เพิ่ม และจัดการ memory ของแต่ละ profile
-- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - จัดการ service key แบบ active key เดียวต่อ client_id
+- [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - จัดการ service key แบบ active key เดียวต่อ client_id และแต่ละ active key ต้องไม่ซ้ำกับ client อื่น
 - [MCP Environment](../platform/mcp-server/.env.example) - config แยกของ MCP server
 - [MCP Production Env](../platform/mcp-server/.env.production.example) - preset สำหรับ deploy แบบแยกเครื่อง
 - [MCP Guide](../platform/mcp-server/README.md) - วิธีรัน MCP แบบแยกเครื่อง
+
+## MCP Tool Groups
+
+ตารางนี้ช่วยจับคู่หน้า `/api-keys` กับ tool ของ MCP ที่ใช้งานอยู่จริง:
+
+| กลุ่ม | Tools | ความหมาย |
+|---|---|---|
+| RAG query | `rag_query`, `platform_list_namespaces`, `platform_kb_stats` | ใช้ตอบคำถามและตรวจสอบสถานะ knowledge base |
+| Ingestion | `rag_ingest`, `knowledge_batch_scrape`, `rag_list_documents` | ใช้ส่งข้อมูลเข้า ingestion queue และดูเอกสาร |
+| Memory | `memory_get`, `memory_save`, `memory_list`, `memory_delete` | ใช้ดู เพิ่ม ลบ memory ของแต่ละ profile |
+| Feedback | `feedback_submit`, `feedback_stats` | ใช้ส่ง feedback และดูสถิติ feedback |
+
+ตอนนี้ MCP ยังไม่มี approve tool แยกโดยตรง ถ้าต้องการให้ setup ง่าย คีย์เดียวสามารถใส่ซ้ำทั้ง `MCP_RAG_SERVICE_API_KEY` และ `MCP_INGESTION_SERVICE_API_KEY` ได้ ถ้าต้องการแยกสิทธิ์ค่อย rotate เป็นคนละค่าในอนาคต
 
 ## อ่านเรื่องอะไรดี
 

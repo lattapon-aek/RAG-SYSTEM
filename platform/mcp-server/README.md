@@ -16,6 +16,23 @@ Standalone MCP runtime for the RAG system.
 - Applies per-client rate limiting using `client_id`.
 - Sends service auth headers when calling RAG and ingestion services.
 
+## Supported Tool Groups
+
+These are the MCP tool groups currently implemented in `src/index.ts`:
+
+| Group | Tools | Purpose |
+|---|---|---|
+| RAG query | `rag_query`, `platform_list_namespaces`, `platform_kb_stats` | Answer questions, inspect namespaces, and check knowledge-base stats. |
+| Ingestion | `rag_ingest`, `knowledge_batch_scrape`, `rag_list_documents` | Submit content or URLs for ingestion and inspect documents. |
+| Memory | `memory_get`, `memory_save`, `memory_list`, `memory_delete` | Read and update profile memory entries. |
+| Feedback | `feedback_submit`, `feedback_stats` | Capture feedback and review feedback trends. |
+
+Notes:
+
+- There is no dedicated approve tool in the current MCP server.
+- Ingestion requests go through the ingestion queue and service, while query and memory tools use the same service-key pattern for authentication.
+- One shared service key can be reused for both `MCP_RAG_SERVICE_API_KEY` and `MCP_INGESTION_SERVICE_API_KEY`, or you can rotate them independently.
+
 ## Key Files
 
 - [`src/index.ts`](./src/index.ts) - MCP tool definitions and server entrypoint.

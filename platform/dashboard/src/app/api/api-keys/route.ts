@@ -110,8 +110,23 @@ export async function POST(req: Request) {
     )
   } catch (error) {
     if (typeof error === 'object' && error && 'code' in error && (error as { code?: string }).code === '23505') {
+      const constraint = typeof error === 'object' && error && 'constraint' in error
+        ? String((error as { constraint?: unknown }).constraint || '')
+        : ''
+      if (constraint === 'uq_api_keys_active_client') {
+        return NextResponse.json(
+          { error: `Client ID ${clientId} already has an active API key` },
+          { status: 409 },
+        )
+      }
+      if (constraint === 'uq_api_keys_active_hash') {
+        return NextResponse.json(
+          { error: 'This API key value is already active for another client' },
+          { status: 409 },
+        )
+      }
       return NextResponse.json(
-        { error: `Client ID ${clientId} already has an active API key` },
+        { error: 'API key conflict detected' },
         { status: 409 },
       )
     }
