@@ -54,6 +54,17 @@ flowchart LR
     Q --> O[Answer / result]
 ```
 
+## RAG Cheat Sheet
+
+- `retrieval` คือการค้นหาชิ้นข้อมูลที่เกี่ยวข้องที่สุดกับคำถาม
+- `chunking` คือการแบ่งเอกสารเป็นส่วนย่อยเพื่อให้ index และค้นหาได้
+- `embedding` คือการแปลงข้อความเป็น vector สำหรับหา semantic similarity
+- `reranking` คือการเรียงลำดับ candidate หลัง retrieval รอบแรก
+- `grounding` คือการทำให้คำตอบยึดกับหลักฐานจาก source จริง
+- `citation` คือการอ้างอิง passage หรือแหล่งข้อมูลที่ใช้ตอบ
+- `memory` คือ context ที่เก็บไว้เพื่อใช้ซ้ำ
+- `graph extraction` คือการดึง entity และความสัมพันธ์ออกมาเป็น graph
+
 ## หมายเหตุ
 
 - เอกสารภาษาอังกฤษใน `docs/` เป็นเอกสารหลัก

@@ -58,6 +58,21 @@ Reading the flow from top to bottom helps connect the docs to the codebase:
 3. `Design` shows how the services and layers are split
 4. `Task` shows where the behavior lives in code
 
+## 10-Minute Reading Plan
+
+If you want a fast walkthrough, spend about 10 minutes in this order:
+
+1. `README.md` in the project root to get the big picture
+2. `docs/README.md` to understand the learning path
+3. `docs/environment.md` to see how the stack boots
+4. `docs/requirement.md` to learn the system goals
+5. `docs/design.md` to understand the architecture
+6. `docs/task.md` to connect the docs back to source code
+7. `ingestion/ingestion-service/interface/routers.py` to see the ingestion API flow
+8. `core/rag-service/interface/routers.py` to see the query flow
+9. `core/graph-service/interface/routers.py` and `intelligence/intelligence-service/main.py` for the graph and background-job parts
+10. `platform/dashboard/src/app/*` and `platform/mcp-server/src/*` to see how humans and tools interact with the system
+
 ## English docs
 
 - [Environment](environment.md)
