@@ -73,6 +73,7 @@ Service health URLs:
 
 ## Documentation
 
+- [Project docs map](docs/README.md)
 - [English docs index](docs/README.md)
 - [Thai docs index](docs/th/README.md)
 - [Environment](docs/environment.md)
@@ -87,6 +88,15 @@ Detailed notes are split into:
   - [Requirement](docs/th/requirement.md)
   - [Design](docs/th/design.md)
   - [Task](docs/th/task.md)
+
+## Docs Map
+
+If you are learning the system, the shortest path is:
+
+1. [Environment](docs/environment.md) - get the stack to boot
+2. [Requirement](docs/requirement.md) - understand the expected behavior
+3. [Design](docs/design.md) - understand the architecture and boundaries
+4. [Task](docs/task.md) - inspect how the behavior is implemented in code
 
 ## Repository Layout
 

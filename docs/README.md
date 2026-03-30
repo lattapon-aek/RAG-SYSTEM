@@ -2,6 +2,10 @@
 
 This folder contains the project documentation in English, with Thai supplemental copies under `docs/th/`.
 
+This repository is intended as a learning resource for understanding how a RAG system is organized, wired, and operated.
+
+Return to the main project page: [README](../README.md)
+
 ## What to read first
 
 | Stage | Read this | Why |
@@ -30,3 +34,4 @@ This folder contains the project documentation in English, with Thai supplementa
 
 - The English documents are the primary reference for the repository.
 - The Thai files are supplementary copies for convenience.
+- Start with `Environment`, then move to `Requirement`, `Design`, and `Task`.
