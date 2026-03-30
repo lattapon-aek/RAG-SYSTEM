@@ -37,3 +37,15 @@
 
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
+
+### แผนที่ requirement ไป walkthrough
+
+ใช้ตารางนี้เมื่ออยากกระโดดจาก requirement ไปยังเส้นทางโค้ดที่เกี่ยวข้อง:
+
+| ส่วนของ requirement | อ่านต่อ |
+|---|---|
+| Document ingestion, preview, queue, status, retry, cancel, rollback, chunk inspection | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| Vector retrieval, RAG answer generation, reranking, cache, memory, citation | [Query walkthrough](query-walkthrough.md) |
+| Graph extraction และ graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) และ [Query walkthrough](query-walkthrough.md) |
+| Intelligence workflows และ background analysis | [Query walkthrough](query-walkthrough.md) |
+| Dashboard และ MCP access | [Query walkthrough](query-walkthrough.md) และ [Ingestion walkthrough](ingestion-walkthrough.md) |

@@ -152,6 +152,8 @@ What to look for while reading:
 - `application/*` for business flow
 - `infrastructure/adapters/*` for concrete integrations
 
+For a service-level view of the same flow, open [the service map](docs/README.md#service-map).
+
 ## Repository Layout
 
 - `core/` - query, graph, and reranking services

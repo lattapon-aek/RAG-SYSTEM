@@ -35,3 +35,15 @@ If you want to see these requirements as real request flows, read:
 
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
+
+## Requirement-to-walkthrough map
+
+Use this quick map when you want to jump from a requirement to the code path that implements it:
+
+| Requirement area | Read next |
+|---|---|
+| Document ingestion, preview, queue, status, retry, cancel, rollback, chunk inspection | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| Vector retrieval, RAG answer generation, reranking, cache, memory, citation | [Query walkthrough](query-walkthrough.md) |
+| Graph extraction and graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) and [Query walkthrough](query-walkthrough.md) |
+| Intelligence workflows and background analysis | [Query walkthrough](query-walkthrough.md) |
+| Dashboard and MCP access | [Query walkthrough](query-walkthrough.md) and [Ingestion walkthrough](ingestion-walkthrough.md) |
