@@ -30,3 +30,10 @@
 - `platform/dashboard/src/app/*`
 - `platform/mcp-server/src/*`
 - `tests/*`
+
+### เอกสาร walkthrough ที่เกี่ยวข้อง
+
+ถ้าต้องการเห็นความต้องการเหล่านี้เป็น flow การทำงานจริง ให้อ่าน:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)

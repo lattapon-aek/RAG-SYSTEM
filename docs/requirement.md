@@ -28,3 +28,10 @@ This document summarizes the system requirements that are reflected in the curre
 - `platform/dashboard/src/app/*`
 - `platform/mcp-server/src/*`
 - `tests/*`
+
+## Related walkthroughs
+
+If you want to see these requirements as real request flows, read:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)

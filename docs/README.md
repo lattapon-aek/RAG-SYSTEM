@@ -51,12 +51,61 @@ flowchart LR
     Q --> O[Answer / result]
 ```
 
+## Service Map
+
+This diagram shows the main services and the data they own so you can connect the docs to the runtime boundaries:
+
+```mermaid
+flowchart TB
+    U[User / operator] --> D[Dashboard]
+    U --> M[MCP server]
+
+    D --> I[Ingestion service]
+    D --> R[RAG service]
+    D --> G[Graph service]
+    D --> X[Intelligence service]
+
+    M --> I
+    M --> R
+    M --> G
+    M --> X
+
+    I --> Q[Redis queue]
+    I --> P[Parser / chunker / embedding]
+    I --> V[Vector store]
+    I --> S[Document metadata and versioning]
+    I --> GS[Graph sync]
+
+    R --> C[Cache / memory / retrieval]
+    R --> RR[Reranker service]
+    R --> V
+    R --> N[Neo4j]
+    R --> L[LLM / model provider]
+
+    G --> N
+    X --> A[Analysis / expiry / feedback jobs]
+
+    Q --> W[Ingestion worker]
+    W --> P
+    W --> V
+    W --> S
+    W --> GS
+
+    V --> R
+    N --> R
+    RR --> R
+    C --> R
+    L --> R
+```
+
 Reading the flow from top to bottom helps connect the docs to the codebase:
 
 1. `Environment` shows what the system needs to start
 2. `Requirement` shows what the system is supposed to do
 3. `Design` shows how the services and layers are split
 4. `Task` shows where the behavior lives in code
+5. `Ingestion walkthrough` shows how a document becomes searchable
+6. `Query walkthrough` shows how a question becomes an answer
 
 ## Walkthroughs
 

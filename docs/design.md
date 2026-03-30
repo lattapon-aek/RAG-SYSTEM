@@ -42,3 +42,10 @@ The stack depends on:
 - `platform/*`
 - `shared/*`
 - `docker-compose.yml`
+
+## Related walkthroughs
+
+The design layer becomes easier to follow when you trace the live request paths:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md) for the ingestion pipeline and worker flow
+- [Query walkthrough](query-walkthrough.md) for retrieval, reranking, and answer generation

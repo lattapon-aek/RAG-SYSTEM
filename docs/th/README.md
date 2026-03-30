@@ -56,6 +56,53 @@ flowchart LR
     Q --> O[Answer / result]
 ```
 
+## Service Map
+
+แผนภาพนี้แสดง service หลักและข้อมูลที่แต่ละตัวดูแล เพื่อเชื่อมเอกสารเข้ากับ runtime boundary:
+
+```mermaid
+flowchart TB
+    U[ผู้ใช้ / operator] --> D[Dashboard]
+    U --> M[MCP server]
+
+    D --> I[Ingestion service]
+    D --> R[RAG service]
+    D --> G[Graph service]
+    D --> X[Intelligence service]
+
+    M --> I
+    M --> R
+    M --> G
+    M --> X
+
+    I --> Q[Redis queue]
+    I --> P[Parser / chunker / embedding]
+    I --> V[Vector store]
+    I --> S[Document metadata and versioning]
+    I --> GS[Graph sync]
+
+    R --> C[Cache / memory / retrieval]
+    R --> RR[Reranker service]
+    R --> V
+    R --> N[Neo4j]
+    R --> L[LLM / model provider]
+
+    G --> N
+    X --> A[Analysis / expiry / feedback jobs]
+
+    Q --> W[Ingestion worker]
+    W --> P
+    W --> V
+    W --> S
+    W --> GS
+
+    V --> R
+    N --> R
+    RR --> R
+    C --> R
+    L --> R
+```
+
 ## RAG Cheat Sheet
 
 - `retrieval` คือการค้นหาชิ้นข้อมูลที่เกี่ยวข้องที่สุดกับคำถาม

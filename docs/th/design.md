@@ -44,3 +44,10 @@ stack นี้พึ่งพา:
 - `platform/*`
 - `shared/*`
 - `docker-compose.yml`
+
+### เอกสาร walkthrough ที่เกี่ยวข้อง
+
+ชั้น design จะอ่านง่ายขึ้นถ้าตาม flow การทำงานจริง:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md) สำหรับ ingestion pipeline และ worker flow
+- [Query walkthrough](query-walkthrough.md) สำหรับ retrieval, reranking และ answer generation
