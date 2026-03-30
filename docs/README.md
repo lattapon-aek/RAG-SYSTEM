@@ -4,6 +4,7 @@ This folder contains the project documentation in English, with Thai supplementa
 
 ## English docs
 
+- [Environment](environment.md)
 - [Requirement](requirement.md)
 - [Design](design.md)
 - [Task](task.md)
@@ -11,6 +12,7 @@ This folder contains the project documentation in English, with Thai supplementa
 ## Thai supplemental docs
 
 - [Thai docs index](th/README.md)
+- [Environment - Thai](th/environment.md)
 - [Requirement - Thai](th/requirement.md)
 - [Design - Thai](th/design.md)
 - [Task - Thai](th/task.md)

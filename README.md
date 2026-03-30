@@ -47,6 +47,7 @@ Recommended checks:
 
 - [English docs index](docs/README.md)
 - [Thai docs index](docs/th/README.md)
+- [Environment](docs/environment.md)
 
 Detailed notes are split into:
 
