@@ -159,6 +159,7 @@ These pages are useful when you want to understand the operator and admin flows 
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - browse, add, and manage memory entries for a profile
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id
 - [MCP Environment](../platform/mcp-server/.env.example) - isolated runtime config for the separate MCP server
+- [MCP Guide](../platform/mcp-server/README.md) - how to run the standalone MCP server on another machine
 
 ## 10-Minute Reading Plan
 
