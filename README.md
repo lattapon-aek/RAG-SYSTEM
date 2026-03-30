@@ -20,21 +20,28 @@ Core capabilities:
 - admin and operator dashboard
 - MCP-based service access
 
-## Quick Start
+## Getting Started
+
+1. Install Docker and Docker Compose.
+2. Copy `.env.example` to `.env`.
+3. Fill in the required values for PostgreSQL, Neo4j, and any optional API keys you need.
+4. Start the stack:
 
 ```bash
 docker compose up -d --build
 ```
 
-Main services:
+5. Open the dashboard and service endpoints:
+   - Dashboard: `http://localhost:3001`
+   - RAG service: `http://localhost:8000`
+   - Ingestion service: `http://localhost:8001`
+   - Graph service: `http://localhost:8002`
+   - Intelligence service: `http://localhost:8003`
 
-- `ingestion/ingestion-service`
-- `core/rag-service`
-- `core/graph-service`
-- `core/reranker-service`
-- `intelligence/intelligence-service`
-- `platform/dashboard`
-- `platform/mcp-server`
+Recommended checks:
+
+- Confirm `docker compose ps` shows all services healthy.
+- Verify `.env` values before first start.
 
 ## Documentation
 
