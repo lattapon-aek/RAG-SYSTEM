@@ -155,7 +155,7 @@ Use these pages when you want to follow a request step by step through the actua
 
 These pages are useful when you want to understand the operator and admin flows around memory and service keys:
 
-- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) - create an empty memory profile before adding entries
+- [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) - create and delete memory profile buckets
 - [Memory Profiles](../platform/dashboard/src/app/memory/MemoryUI.tsx) - browse, add, and manage memory entries for a profile
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) - manage one active service key per client_id
 

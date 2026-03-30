@@ -86,7 +86,7 @@ Detailed notes are split into:
 - [Requirement](docs/requirement.md)
 - [Design](docs/design.md)
 - [Task](docs/task.md)
-- [Create Memory Profile](platform/dashboard/src/app/memory/create/page.tsx) for admin-only profile creation
+- [Memory Profile Registry](platform/dashboard/src/app/memory-profiles/page.tsx) for admin-only profile creation
 - [Service Key Registry](platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) for one-active-key-per-client management
 
 - Thai supplements:

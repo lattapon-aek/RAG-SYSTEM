@@ -733,6 +733,40 @@ async def memory_profile_create(req: MemoryProfileCreateRequest,
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.delete("/memory/users/{user_id}")
+async def memory_profile_delete(user_id: str,
+                                 memory=Depends(get_memory_service),
+                                 doc_repo=Depends(get_doc_repo)):
+    normalized = user_id.strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    deleted_entries = 0
+    if memory:
+        try:
+            existing_entries = await memory.list(normalized)
+            for entry in existing_entries:
+                entry_id = entry.get("id") if isinstance(entry, dict) else getattr(entry, "id", None)
+                if not entry_id:
+                    continue
+                await memory.delete(normalized, str(entry_id))
+                deleted_entries += 1
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    try:
+        pool = await doc_repo._get_pool()
+        await pool.execute("DELETE FROM memory_profiles WHERE user_id = $1", normalized)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "status": "deleted",
+        "user_id": normalized,
+        "deleted_entries": deleted_entries,
+    }
+
+
 @router.get("/memory/stats")
 async def memory_stats(doc_repo=Depends(get_doc_repo)):
     """Return aggregate memory stats: short-term (Redis) and long-term (Postgres)."""

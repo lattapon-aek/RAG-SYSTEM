@@ -61,5 +61,5 @@ INGESTION_SERVICE_API_KEY=
 - [Requirement](requirement.md) เพื่อดูเป้าหมายของระบบที่ตัวแปรพวกนี้รองรับ
 - [Design](design.md) เพื่อดู boundary ของ service ที่ใช้ค่าพวกนี้
 - [Task](task.md) เพื่อดูจุดที่ configuration มีผลต่อ implementation
-- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) สำหรับ flow สร้าง profile ของ admin
+- [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) สำหรับ flow สร้าง profile ของ admin
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) สำหรับ flow service key ที่มี active key เดียวต่อ client

@@ -61,5 +61,5 @@ If you want to connect environment setup to the rest of the learning path, read:
 - [Requirement](requirement.md) for the system goals behind these variables
 - [Design](design.md) for the service boundaries that consume these variables
 - [Task](task.md) for the implementation areas affected by configuration
-- [Create Memory Profile](../platform/dashboard/src/app/memory/create/page.tsx) for the admin-only profile creation flow
+- [Memory Profile Registry](../platform/dashboard/src/app/memory-profiles/page.tsx) for the admin-only profile creation flow
 - [Service Key Registry](../platform/dashboard/src/app/api-keys/ApiKeysUI.tsx) for the active-key-per-client flow
