@@ -19,6 +19,25 @@ User asks a question
   -> Citations and metadata are returned
 ```
 
+```mermaid
+flowchart LR
+    U[User] --> R[Query router]
+    R --> U1[Query use case]
+    U1 --> C[Cache check]
+    U1 --> M[Memory lookup]
+    U1 --> I[Intent analysis]
+    I --> RW[Query rewrite / decomposition]
+    RW --> RT[Parallel retrieval]
+    RT --> V[Vector results]
+    RT --> G[Graph results]
+    V --> MRG[Merge and rerank]
+    G --> MRG
+    MRG --> CTX[Context builder]
+    CTX --> GEN[Answer generation]
+    GEN --> VER[Grounding / citation verification]
+    VER --> O[Answer + citations]
+```
+
 ## Step by step
 
 ### 1. The request enters the RAG service
@@ -90,6 +109,12 @@ It also checks whether the answer is grounded in the retrieved evidence and retu
 When the pipeline detects gaps or uncertainty, it can record signals for later analysis.
 
 That data helps the intelligence layer learn where the system needs better retrieval, better coverage, or better prompts.
+
+### 9. Streaming and non-streaming share the same core pipeline
+
+The final generation step can return output in one shot or stream tokens incrementally.
+
+Both modes use the same upstream retrieval and context-building stages, so debugging usually starts above the response delivery layer, not at the transport layer.
 
 ## What to read in the code next
 

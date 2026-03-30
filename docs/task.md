@@ -2,6 +2,11 @@
 
 This document groups the main implementation tasks that exist in the repository.
 
+If you want to see these tasks as real execution paths, read:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
+
 ## Ingestion tasks
 
 - Implement file and text ingestion endpoints

@@ -4,6 +4,11 @@
 
 เอกสารนี้สรุปงานที่ลงมือทำจริงใน repo
 
+ถ้าต้องการดูงานเหล่านี้ในรูปของ flow การทำงานจริง ให้อ่าน:
+
+- [Ingestion walkthrough](ingestion-walkthrough.md)
+- [Query walkthrough](query-walkthrough.md)
+
 ### งานฝั่ง ingestion
 
 - ทำ endpoint สำหรับรับไฟล์และข้อความ

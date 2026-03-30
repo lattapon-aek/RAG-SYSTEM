@@ -18,6 +18,25 @@ User uploads a document
   -> The document becomes available for retrieval
 ```
 
+```mermaid
+flowchart LR
+    U[User] --> R[Ingestion router]
+    R --> Q[Redis queue]
+    Q --> W[Ingestion worker]
+    W --> C[Ingest use case]
+    C --> P[Parse document]
+    P --> K[Chunk text]
+    K --> E[Embed chunks]
+    E --> V[Vector store]
+    C --> M[Document metadata]
+    C --> S[Version tracking]
+    C --> G[Graph sync]
+    V --> A[Searchable knowledge]
+    M --> A
+    S --> A
+    G --> A
+```
+
 ## Step by step
 
 ### 1. The request enters the ingestion service
@@ -82,6 +101,12 @@ When the ingestion flow reaches the graph stage, the worker reports progress acc
 The preview endpoint uses the same general understanding of the document, but it stops before the full persistence path.
 
 This lets you inspect what would happen before you commit the job to the full ingestion pipeline.
+
+### 7. Status updates keep the UI informed
+
+While the worker runs, the job status moves through states such as queued, processing, done, failed, or cancelled.
+
+That status path is what powers the dashboard views and lets users know whether ingestion is still running or already finished.
 
 ## What to read in the code next
 

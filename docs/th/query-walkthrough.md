@@ -19,6 +19,25 @@
   -> ส่ง citation และ metadata กลับไป
 ```
 
+```mermaid
+flowchart LR
+    U[ผู้ใช้] --> R[Query router]
+    R --> U1[Query use case]
+    U1 --> C[Cache check]
+    U1 --> M[Memory lookup]
+    U1 --> I[Intent analysis]
+    I --> RW[Query rewrite / decomposition]
+    RW --> RT[Parallel retrieval]
+    RT --> V[Vector results]
+    RT --> G[Graph results]
+    V --> MRG[Merge and rerank]
+    G --> MRG
+    MRG --> CTX[Context builder]
+    CTX --> GEN[Answer generation]
+    GEN --> VER[Grounding / citation verification]
+    VER --> O[Answer + citations]
+```
+
 ## ทีละขั้น
 
 ### 1. Request เข้าสู่ RAG service
@@ -90,6 +109,12 @@ pipeline ใช้ได้ทั้งแบบ streaming และ non-streami
 ถ้า pipeline เจอช่องว่างหรือความไม่แน่ใจ ระบบสามารถบันทึก signal สำหรับวิเคราะห์ต่อได้
 
 ข้อมูลนี้ช่วย intelligence layer เรียนรู้ว่าตรงไหนควรปรับ retrieval, coverage หรือ prompt
+
+### 9. Streaming และ non-streaming ใช้ pipeline แกนเดียวกัน
+
+ขั้นตอนสร้างคำตอบสุดท้ายอาจส่งออกทีละ token หรือส่งกลับมาทั้งชุด
+
+ทั้งสองแบบใช้ retrieval และ context-building ชุดเดียวกัน ดังนั้นเวลาตรวจปัญหาควรเริ่มจากชั้นบนของ pipeline ก่อน ไม่ใช่ transport layer
 
 ## ควรอ่านโค้ดต่อ
 
