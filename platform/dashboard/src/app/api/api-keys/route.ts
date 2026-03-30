@@ -51,20 +51,35 @@ export async function POST(req: Request) {
     return session
   }
 
+  let clientId = ''
   try {
     const body = await req.json()
-    const clientId = typeof body?.client_id === 'string' ? body.client_id.trim() : ''
+    clientId = typeof body?.client_id === 'string' ? body.client_id.trim() : ''
     const label = typeof body?.label === 'string' ? body.label.trim() : ''
 
     if (!clientId) {
       return NextResponse.json({ error: 'Client ID is required' }, { status: 400 })
     }
 
+    const createdBy = session.user.name ?? session.user.id
+    const pool = getDashboardPgPool()
+    const activeExisting = await pool.query(
+      `SELECT id
+       FROM api_keys
+       WHERE client_id = $1
+         AND revoked_at IS NULL
+       LIMIT 1`,
+      [clientId],
+    )
+    if ((activeExisting.rowCount ?? 0) > 0) {
+      return NextResponse.json(
+        { error: `Client ID ${clientId} already has an active API key` },
+        { status: 409 },
+      )
+    }
     const plaintextKey = makePlaintextKey()
     const hashedKey = hashKey(plaintextKey)
     const keyPrefix = plaintextKey.slice(0, 16)
-    const createdBy = session.user.name ?? session.user.id
-    const pool = getDashboardPgPool()
     const result = await pool.query(
       `INSERT INTO api_keys (client_id, hashed_key, label, key_prefix, created_by)
        VALUES ($1, $2, $3, $4, $5)
@@ -94,6 +109,12 @@ export async function POST(req: Request) {
       { status: 201 },
     )
   } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && (error as { code?: string }).code === '23505') {
+      return NextResponse.json(
+        { error: `Client ID ${clientId} already has an active API key` },
+        { status: 409 },
+      )
+    }
     console.error('Failed to create API key:', error)
     return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 })
   }

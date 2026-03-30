@@ -129,6 +129,7 @@ export default function ApiKeysUI() {
           <p className="mt-1 text-sm text-gray-400">
             Bind the key to a <code>client_id</code>. The same client_id is used by Client Report & Limits for quota
             and rate-limit lookups. This page is for service client IDs, not dashboard user IDs.
+            Only one active key can exist per client_id; revoke the active key before creating a new one.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">

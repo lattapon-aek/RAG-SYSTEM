@@ -383,6 +383,7 @@ export default function MemoryUI() {
             <h2 className="text-lg font-semibold text-white">Memory Profiles</h2>
             <p className="mt-0.5 text-xs text-gray-400">
               Report profiles here. Open a profile to browse, add, and manage memory entries.
+              Create a new profile from Admin → Create Memory Profile.
             </p>
           </div>
           <div className="flex gap-2">

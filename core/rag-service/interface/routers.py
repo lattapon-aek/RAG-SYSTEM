@@ -8,7 +8,7 @@ try:
     from interface.schemas import (
         QueryRequest, QueryResponse, CitationResponse,
         FeedbackRequest, DocumentResponse,
-        MemoryGetRequest, MemorySaveRequest, HealthResponse,
+        MemoryGetRequest, MemorySaveRequest, MemoryProfileCreateRequest, HealthResponse,
         MetricsSummaryResponse, CircuitBreakerStatus, RateLimitStats,
         KnowledgeGapResponse, QuotaUpdateRequest, RateLimitUpdateRequest,
         RetrieveRequest, RetrieveResponse, RetrieveChunk, StageTimingInfo,
@@ -23,7 +23,7 @@ except ImportError:
     from .schemas import (
         QueryRequest, QueryResponse, CitationResponse,
         FeedbackRequest, DocumentResponse,
-        MemoryGetRequest, MemorySaveRequest, HealthResponse,
+        MemoryGetRequest, MemorySaveRequest, MemoryProfileCreateRequest, HealthResponse,
         MetricsSummaryResponse, CircuitBreakerStatus, RateLimitStats,
         KnowledgeGapResponse, QuotaUpdateRequest, RateLimitUpdateRequest,
         RetrieveRequest, RetrieveResponse, RetrieveChunk, StageTimingInfo,
@@ -670,11 +670,67 @@ async def memory_get(req: MemoryGetRequest,
 
 @router.post("/memory/save")
 async def memory_save(req: MemorySaveRequest,
-                      memory=Depends(get_memory_service)):
+                      memory=Depends(get_memory_service),
+                      doc_repo=Depends(get_doc_repo)):
     if not memory:
         raise HTTPException(status_code=503, detail="Memory service not enabled")
     memory_id = await memory.save(req.user_id, req.content, req.metadata)
+    try:
+        pool = await doc_repo._get_pool()
+        await pool.execute(
+            """INSERT INTO memory_profiles (user_id, label, notes)
+               VALUES ($1, NULL, NULL)
+               ON CONFLICT (user_id) DO NOTHING""",
+            req.user_id,
+        )
+    except Exception:
+        pass
     return {"memory_id": memory_id}
+
+
+@router.post("/memory/users")
+async def memory_profile_create(req: MemoryProfileCreateRequest,
+                                doc_repo=Depends(get_doc_repo)):
+    user_id = req.user_id.strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    try:
+        pool = await doc_repo._get_pool()
+        existing = await pool.fetchrow(
+            """
+            SELECT 1 AS exists_flag
+            FROM (
+                SELECT user_id FROM memory_profiles WHERE user_id = $1
+                UNION
+                SELECT user_id FROM user_memory WHERE user_id = $1
+            ) AS existing_profiles
+            LIMIT 1
+            """,
+            user_id,
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Profile {user_id} already exists")
+        row = await pool.fetchrow(
+            """INSERT INTO memory_profiles (user_id, label, notes)
+               VALUES ($1, $2, $3)
+               RETURNING user_id, label, notes, created_at, created_by""",
+            user_id,
+            req.label.strip() if isinstance(req.label, str) and req.label.strip() else None,
+            req.notes.strip() if isinstance(req.notes, str) and req.notes.strip() else None,
+        )
+        return {
+            "user_id": row["user_id"],
+            "label": row["label"],
+            "notes": row["notes"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "created_by": row["created_by"],
+        }
+    except Exception as exc:
+        if getattr(exc, "status_code", None) == 409:
+            raise
+        if getattr(exc, "code", None) == "23505":
+            raise HTTPException(status_code=409, detail=f"Profile {user_id} already exists")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/memory/stats")
@@ -729,22 +785,42 @@ async def memory_stats(doc_repo=Depends(get_doc_repo)):
 
 @router.get("/memory/users/list")
 async def memory_users(doc_repo=Depends(get_doc_repo)):
-    """List all user_ids that have entries in long-term (Postgres) memory."""
+    """List all profiles known to memory, including empty profiles."""
     try:
         pool = await doc_repo._get_pool()
         rows = await pool.fetch(
-            """SELECT user_id,
-                      COUNT(*) AS entry_count,
-                      MAX(created_at) AS last_updated
-               FROM user_memory
-               GROUP BY user_id
-               ORDER BY last_updated DESC"""
+            """
+            WITH entry_stats AS (
+                SELECT user_id,
+                       COUNT(*) AS entry_count,
+                       MAX(created_at) AS last_updated
+                FROM user_memory
+                GROUP BY user_id
+            )
+            SELECT
+                COALESCE(e.user_id, p.user_id) AS user_id,
+                COALESCE(e.entry_count, 0) AS entry_count,
+                e.last_updated,
+                p.label,
+                p.notes,
+                p.created_at AS profile_created_at,
+                p.created_by
+            FROM memory_profiles p
+            FULL OUTER JOIN entry_stats e
+              ON e.user_id = p.user_id
+            ORDER BY COALESCE(e.last_updated, p.created_at) DESC NULLS LAST,
+                     COALESCE(e.user_id, p.user_id)
+            """
         )
         return [
             {
                 "user_id": r["user_id"],
                 "entry_count": int(r["entry_count"]),
                 "last_updated": r["last_updated"].isoformat() if r["last_updated"] else None,
+                "label": r["label"],
+                "notes": r["notes"],
+                "created_at": r["profile_created_at"].isoformat() if r["profile_created_at"] else None,
+                "created_by": r["created_by"],
             }
             for r in rows
         ]

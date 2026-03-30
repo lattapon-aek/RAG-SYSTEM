@@ -95,6 +95,12 @@ class MemorySaveRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class MemoryProfileCreateRequest(BaseModel):
+    user_id: str
+    label: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str = "rag-service"

@@ -274,6 +274,16 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
         ),
       },
       {
+        href: '/memory/create',
+        label: 'Create Memory Profile',
+        minRole: 'admin',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" />
+          </svg>
+        ),
+      },
+      {
         href: '/api-keys',
         label: 'Service Keys',
         minRole: 'admin',
