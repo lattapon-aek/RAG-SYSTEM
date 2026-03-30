@@ -1,0 +1,16 @@
+fastapi>=0.115.0
+python-multipart>=0.0.9
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+httpx>=0.27.0
+# crawl4ai is optional — pulls playwright/chromium (~500MB).
+# Falls back to httpx-based scraping when not installed.
+# crawl4ai>=0.3.0
+sqlalchemy>=2.0.0
+duckdb>=0.10.0
+feedparser>=6.0.11
+psycopg2-binary>=2.9.9
+opentelemetry-sdk>=1.24.0
+opentelemetry-exporter-otlp>=1.24.0
+tenacity>=8.3.0
+pyyaml>=6.0.1

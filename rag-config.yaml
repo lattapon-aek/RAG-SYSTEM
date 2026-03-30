@@ -1,0 +1,128 @@
+llm:
+  provider: ollama
+  model_simple: llama3.2:3b
+  model_standard: llama3.2:8b
+  model_complex: llama3.1:70b
+  model_compression: llama3.2:3b
+  temperature: 0.0
+  routing_enabled: true
+  prompt_caching_enabled: false
+  pipeline_provider: ollama
+  pipeline_model: llama3.2:3b
+  pipeline_temperature: 0.0
+  fallback_provider: openai
+  fallback_model: gpt-4o-mini
+  fallback_enabled: false
+
+embedding:
+  provider: ollama
+  model: bge-m3
+  fallback_provider: openai
+  fallback_model: text-embedding-ada-002
+  fallback_enabled: false
+
+reranker:
+  backend: bge
+  model: BAAI/bge-reranker-base
+
+retrieval:
+  vector_store: chromadb
+  chunker: hierarchical
+  initial_top_k: 20
+  final_top_k: 5
+  adaptive_retrieval: enabled
+  crag_threshold: 0.50
+  early_exit_threshold: 0.92
+
+query_pipeline:
+  query_rewriter: enabled
+  hyde: disabled
+  query_decomposition: enabled
+  graph_augmentation: enabled
+  context_compression: extractive
+  max_context_tokens: 4096
+  force_extractive_on_complex: true
+
+knowledge_connector:
+  web_search_enabled: true
+  web_search_fallback: true
+  scrape_enabled: true
+  rss_enabled: true
+  db_query_enabled: false
+  searxng_url: http://searxng:8080
+  default_num_results: 10
+
+cache:
+  enabled: true
+  similarity_threshold: 0.95
+  ttl_seconds: 86400
+  redis_db: 0
+
+memory:
+  short_term_enabled: true
+  short_term_ttl_seconds: 3600
+  short_term_redis_db: 1
+  long_term_enabled: true
+
+temporal:
+  freshness_decay_enabled: true
+  freshness_decay_weight: 0.1
+  web_content_ttl_days: 7
+  rss_content_ttl_days: 3
+
+tools:
+  calculator: enabled
+  datetime: enabled
+  code_executor: disabled
+
+evaluation:
+  enabled: true
+  sample_rate: 0.10
+  heuristic_metrics: true
+  ragas_metrics: [faithfulness, answer_relevance, context_precision, context_recall]
+  ragas_provider: ollama
+  ragas_model: llama3.2:8b
+
+feedback:
+  low_confidence_threshold: 0.5
+  auto_trigger_self_learning: true
+
+graph:
+  entity_extractor: spacy
+
+intelligence:
+  clustering_algorithm: hdbscan
+  clustering_min_cluster_size: 5
+  clustering_metric: cosine
+
+rate_limiting:
+  enabled: true
+  default_rpm: 60
+  default_daily_tokens: 100000
+  redis_db: 2
+
+versioning:
+  enabled: true
+  max_versions_per_document: 3
+
+namespaces:
+  default_namespace: default
+  enabled: true
+
+circuit_breaker:
+  enabled: true
+  fail_max: 5
+  reset_timeout_seconds: 30
+
+ingestion_queue:
+  workers: 2
+  max_retries: 3
+  job_retention_days: 7
+
+streaming:
+  enabled: true
+
+citation_verification:
+  enabled: true
+  grounding_threshold: 0.5
+  method: token_overlap

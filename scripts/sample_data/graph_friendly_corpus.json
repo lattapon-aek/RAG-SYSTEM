@@ -1,0 +1,27 @@
+[
+  {
+    "filename": "graph_org_structure.txt",
+    "content_source": "upload",
+    "text": "Narin Sutham leads Acme Services. Ploy Anan manages Human Resources. Krit Chai manages IT Operations. Somchai Rerk manages Finance Team. Human Resources supports Acme Services. IT Operations supports Acme Services. Finance Team supports Acme Services."
+  },
+  {
+    "filename": "graph_reporting_lines.txt",
+    "content_source": "upload",
+    "text": "Ploy Anan reports to Narin Sutham. Krit Chai reports to Narin Sutham. Somchai Rerk reports to Narin Sutham. Maya Chen leads Customer Success. Maya Chen reports to Narin Sutham."
+  },
+  {
+    "filename": "graph_system_map.txt",
+    "content_source": "upload",
+    "text": "Support Desk connects to Identity Gateway. Support Desk sends updates to Analytics Hub. HR Portal stores records in Postgres. Finance Suite exports summaries to Analytics Hub. Grafana monitors Support Desk. Grafana monitors Finance Suite. Grafana monitors HR Portal."
+  },
+  {
+    "filename": "graph_access_flow.txt",
+    "content_source": "upload",
+    "text": "Krit Chai approves VPN Access. Somchai Rerk approves Finance Suite Access. HR Portal uses Postgres. Finance Suite uses Postgres. IT Operations manages VPN Access. Finance Team uses Finance Suite."
+  },
+  {
+    "filename": "graph_vendor_flow.txt",
+    "content_source": "upload",
+    "text": "Finance Team pays Siam Supplies. Finance Team pays Bright Network Services. Somchai Rerk reviews Payment Batch. Narin Sutham approves Payment Exception. Analytics Hub receives Payment Summary."
+  }
+]

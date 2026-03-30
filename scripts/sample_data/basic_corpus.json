@@ -1,0 +1,32 @@
+[
+  {
+    "filename": "company_overview.txt",
+    "content_source": "upload",
+    "text": "Acme Services is a mid-sized technology company based in Bangkok. Narin Sutham is the Chief Executive Officer. Ploy Anan leads the Human Resources team. The company provides internal knowledge systems, customer support tools, and analytics platforms for regional businesses. The main departments are Human Resources, Finance, IT Operations, and Customer Success."
+  },
+  {
+    "filename": "hr_leave_policy.txt",
+    "content_source": "upload",
+    "text": "The Human Resources team manages employee leave requests through the HR Portal. Employees submit annual leave requests to their direct manager. Ploy Anan approves policy exceptions. Managers must review requests within three business days. IT Operations supports the HR Portal when users cannot log in."
+  },
+  {
+    "filename": "it_access_management.txt",
+    "content_source": "upload",
+    "text": "IT Operations manages user access for the HR Portal, Finance Suite, and Support Desk. Krit Chai is the IT Operations Manager. New employees receive email, VPN, and Support Desk access on their first working day. Access to the Finance Suite requires approval from Somchai Rerk, the Finance Manager."
+  },
+  {
+    "filename": "finance_payment_workflow.txt",
+    "content_source": "upload",
+    "text": "The Finance team processes vendor payments every Tuesday and Thursday. Somchai Rerk reviews payment batches in the Finance Suite. Approved invoices are sent to Siam Supplies and Bright Network Services. Payment exceptions are escalated to Narin Sutham. The Finance team stores payment references in Postgres reporting tables."
+  },
+  {
+    "filename": "customer_support_incident.txt",
+    "content_source": "upload",
+    "text": "On 2026-02-14, Customer Success reported a login incident affecting the Support Desk system. Krit Chai coordinated recovery with IT Operations. The incident was traced to an expired token between Support Desk and the Identity Gateway. Customer Success informed premium customers after the service was restored at 14:30."
+  },
+  {
+    "filename": "system_integration_overview.txt",
+    "content_source": "upload",
+    "text": "Support Desk sends case updates to the Analytics Hub and receives user identity data from the Identity Gateway. The HR Portal stores employee records in Postgres. Finance Suite exports approved payment summaries to the Analytics Hub. IT Operations monitors Support Desk, Finance Suite, and the HR Portal through Grafana dashboards."
+  }
+]

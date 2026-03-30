@@ -1,0 +1,661 @@
+# =============================================================================
+# RAG System — Docker Compose
+# All services, volumes, and networks for the full RAG microservices stack.
+# =============================================================================
+
+networks:
+  rag-network:
+    driver: bridge
+
+volumes:
+  chroma-data:
+  neo4j-data:
+  postgres-data:
+  redis-data:
+  ollama-data:
+  traefik-certs:
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "10"
+
+x-restart: &default-restart
+  restart: unless-stopped
+
+x-resource-light: &resource-light
+  cpus: "0.05"
+  mem_limit: 64m
+  pids_limit: 40
+
+x-resource-medium: &resource-medium
+  cpus: "0.15"
+  mem_limit: 192m
+  pids_limit: 60
+
+x-resource-heavy: &resource-heavy
+  cpus: "0.35"
+  mem_limit: 640m
+  pids_limit: 80
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # INGRESS LAYER
+  # ---------------------------------------------------------------------------
+
+  traefik:
+    image: traefik:v3.0
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8090:8080"   # Traefik dashboard
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--ping=true"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-certs:/letsencrypt"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=${TRAEFIK_RATE_LIMIT_RPS:-100}"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=50"
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PLATFORM LAYER
+  # ---------------------------------------------------------------------------
+
+  mcp-server:
+    build: ./platform/mcp-server
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "3000:3000"
+    environment:
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8000}
+      - INGESTION_SERVICE_URL=${INGESTION_SERVICE_URL:-http://ingestion-service:8001}
+      - KNOWLEDGE_CONNECTOR_URL=${KNOWLEDGE_CONNECTOR_URL:-http://knowledge-connector:8006}
+      - INTELLIGENCE_SERVICE_URL=${INTELLIGENCE_SERVICE_URL:-http://intelligence-service:8003}
+      - RAG_SERVICE_API_KEY=${RAG_SERVICE_API_KEY:-}
+      - INGESTION_SERVICE_API_KEY=${INGESTION_SERVICE_API_KEY:-}
+      - KNOWLEDGE_CONNECTOR_API_KEY=${KNOWLEDGE_CONNECTOR_API_KEY:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=mcp-server
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  dashboard:
+    build: ./platform/dashboard
+    <<: [*default-restart, *resource-medium]
+    ports:
+      - "3001:3001"
+    environment:
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8000}
+      - INTELLIGENCE_SERVICE_URL=${INTELLIGENCE_SERVICE_URL:-http://intelligence-service:8003}
+      - GRAPH_SERVICE_URL=${GRAPH_SERVICE_URL:-http://graph-service:8002}
+      - INGESTION_SERVICE_URL=${INGESTION_SERVICE_URL:-http://ingestion-service:8001}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - UTILITY_LLM_PROVIDER=${UTILITY_LLM_PROVIDER:-ollama}
+      - GENERATION_LLM_PROVIDER=${GENERATION_LLM_PROVIDER:-ollama}
+      - GRAPH_LLM_PROVIDER=${GRAPH_LLM_PROVIDER:-ollama}
+      - GAP_DRAFT_LLM_PROVIDER=${GAP_DRAFT_LLM_PROVIDER:-ollama}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:8b}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.2:8b}
+      - UTILITY_LLM_MODEL=${UTILITY_LLM_MODEL:-llama3.2:3b}
+      - GENERATION_LLM_MODEL=${GENERATION_LLM_MODEL:-llama3.2:8b}
+      - GRAPH_LLM_MODEL=${GRAPH_LLM_MODEL:-typhoon-v2.5-30b-a3b-instruct}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-bge-m3}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+      - CHROMA_COLLECTION_PREFIX=${CHROMA_COLLECTION_PREFIX:-rag_1024}
+      - RERANKER_BACKEND=${RERANKER_BACKEND:-noop}
+      - RERANKER_MODEL=${RERANKER_MODEL:-BAAI/bge-reranker-base}
+      - LLM_RERANKER_MODEL=${LLM_RERANKER_MODEL:-qwen3:0.6b}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3001
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - BOOTSTRAP_ADMIN_USERNAME=${BOOTSTRAP_ADMIN_USERNAME:-}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=dashboard
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama:latest
+    <<: [*default-restart, *resource-heavy]
+    mem_limit: 1536m
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-2}
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    <<: *resource-light
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: >
+      /bin/sh -c "
+        until ollama list > /dev/null 2>&1; do
+          echo '[ollama-init] waiting for ollama...';
+          sleep 5;
+        done &&
+        ollama pull bge-m3 &&
+        ollama pull llama3.2:3b
+      "
+    networks:
+      - rag-network
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # DB MIGRATION (runs once on startup, then exits)
+  # ---------------------------------------------------------------------------
+
+  db-migrate:
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    <<: *resource-light
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_URL=${POSTGRES_URL}
+    volumes:
+      - ./scripts/migrations:/migrations:ro
+      - ./scripts/run_migrations.sh:/run_migrations.sh:ro
+    entrypoint: >
+      /bin/sh -c "
+        until pg_isready -h postgres -U postgres; do sleep 1; done &&
+        POSTGRES_URL=${POSTGRES_URL} bash /run_migrations.sh
+      "
+    networks:
+      - rag-network
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # QUERY PATH
+  # ---------------------------------------------------------------------------
+
+  rag-service:
+    build:
+      context: .
+      dockerfile: core/rag-service/Dockerfile
+    <<: [*default-restart, *resource-heavy]
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_URL=${CHROMA_URL:-http://chromadb:8004}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_MODE=${REDIS_MODE:-single}
+      - REDIS_SENTINEL_HOSTS=${REDIS_SENTINEL_HOSTS:-}
+      - GRAPH_SERVICE_URL=${GRAPH_SERVICE_URL:-http://graph-service:8002}
+      - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-http://reranker-service:8005}
+      - KNOWLEDGE_CONNECTOR_URL=${KNOWLEDGE_CONNECTOR_URL:-http://knowledge-connector:8006}
+      - INTELLIGENCE_SERVICE_URL=${INTELLIGENCE_SERVICE_URL:-http://intelligence-service:8003}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - UTILITY_LLM_PROVIDER=${UTILITY_LLM_PROVIDER:-ollama}
+      - GENERATION_LLM_PROVIDER=${GENERATION_LLM_PROVIDER:-ollama}
+      - GRAPH_LLM_PROVIDER=${GRAPH_LLM_PROVIDER:-ollama}
+      - GAP_DRAFT_LLM_PROVIDER=${GAP_DRAFT_LLM_PROVIDER:-ollama}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:0.6b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-90}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-12h}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.2:8b}
+      - TYPHOON_API_KEY=${TYPHOON_API_KEY:-}
+      - TYPHOON_BASE_URL=${TYPHOON_BASE_URL:-https://api.opentyphoon.ai/v1}
+      - TYPHOON_MODEL=${TYPHOON_MODEL:-typhoon-v2.1-12b-instruct}
+      - UTILITY_LLM_MODEL=${UTILITY_LLM_MODEL:-llama3.2:3b}
+      - GENERATION_LLM_MODEL=${GENERATION_LLM_MODEL:-llama3.2:8b}
+      - OLLAMA_LLM_MODEL_SIMPLE=${OLLAMA_LLM_MODEL_SIMPLE:-llama3.2:3b}
+      - OLLAMA_LLM_MODEL_COMPLEX=${OLLAMA_LLM_MODEL_COMPLEX:-llama3.1:70b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-bge-m3}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+      - CHROMA_COLLECTION_PREFIX=${CHROMA_COLLECTION_PREFIX:-rag_1024}
+      - OLLAMA_EMBEDDING_CONCURRENCY=${OLLAMA_EMBEDDING_CONCURRENCY:-2}
+      - CHUNKER_STRATEGY=${CHUNKER_STRATEGY:-fixed}
+      - SEMANTIC_CHUNK_MAX_TOKENS=${SEMANTIC_CHUNK_MAX_TOKENS:-256}
+      - SEMANTIC_CHUNK_SIMILARITY_THRESHOLD=${SEMANTIC_CHUNK_SIMILARITY_THRESHOLD:-0.65}
+      - LLM_FALLBACK_ENABLED=${LLM_FALLBACK_ENABLED:-false}
+      - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-openai}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SECRET_BACKEND=${SECRET_BACKEND:-env}
+      - VAULT_ADDR=${VAULT_ADDR:-}
+      - VAULT_TOKEN=${VAULT_TOKEN:-}
+      - ENABLE_MEMORY=${ENABLE_MEMORY:-true}
+      - MEMORY_BACKEND=${MEMORY_BACKEND:-composite}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_SECRET_PREFIX=${AWS_SECRET_PREFIX:-rag-system/}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=rag-service
+      - RAG_API_KEY=${RAG_API_KEY:-}
+      - RAG_REQUIRE_DB_API_KEYS=${RAG_REQUIRE_DB_API_KEYS:-false}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  reranker-service:
+    build: ./core/reranker-service
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "8005:8005"
+    environment:
+      - RERANKER_BACKEND=${RERANKER_BACKEND:-noop}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
+      - RERANKER_DEVICE=${RERANKER_DEVICE:-cpu}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=reranker-service
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8005/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  graph-service:
+    build:
+      context: .
+      dockerfile: core/graph-service/Dockerfile
+    <<: [*default-restart, *resource-medium]
+    ports:
+      - "8002:8002"
+    environment:
+      - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - GRAPH_EXTRACTOR_BACKEND=${GRAPH_EXTRACTOR_BACKEND:-llm}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - UTILITY_LLM_PROVIDER=${UTILITY_LLM_PROVIDER:-ollama}
+      - GENERATION_LLM_PROVIDER=${GENERATION_LLM_PROVIDER:-ollama}
+      - GRAPH_LLM_PROVIDER=${GRAPH_LLM_PROVIDER:-ollama}
+      - GAP_DRAFT_LLM_PROVIDER=${GAP_DRAFT_LLM_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:0.6b}
+      - UTILITY_LLM_MODEL=${UTILITY_LLM_MODEL:-qwen3:0.6b}
+      - GRAPH_LLM_MODEL=${GRAPH_LLM_MODEL:-typhoon-v2.5-30b-a3b-instruct}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - TYPHOON_API_KEY=${TYPHOON_API_KEY:-}
+      - TYPHOON_BASE_URL=${TYPHOON_BASE_URL:-https://api.opentyphoon.ai/v1}
+      - TYPHOON_MODEL=${TYPHOON_MODEL:-typhoon-v2.1-12b-instruct}
+      - GRAPH_EXTRACTOR_TIMEOUT_SECONDS=${GRAPH_EXTRACTOR_TIMEOUT_SECONDS:-180}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=graph-service
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/graph/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # INGESTION PATH
+  # ---------------------------------------------------------------------------
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: ingestion/ingestion-service/Dockerfile
+    <<: [*default-restart, *resource-medium]
+    ports:
+      - "8001:8001"
+    environment:
+      - CHROMA_URL=${CHROMA_URL:-http://chromadb:8004}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - GRAPH_SERVICE_URL=${GRAPH_SERVICE_URL:-http://graph-service:8002}
+      - GRAPH_SERVICE_TIMEOUT_SECONDS=${GRAPH_SERVICE_TIMEOUT_SECONDS:-180}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - GENERATION_LLM_PROVIDER=${GENERATION_LLM_PROVIDER:-ollama}
+      - GRAPH_LLM_PROVIDER=${GRAPH_LLM_PROVIDER:-typhoon}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:0.6b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-120}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.2:8b}
+      - TYPHOON_API_KEY=${TYPHOON_API_KEY:-}
+      - TYPHOON_BASE_URL=${TYPHOON_BASE_URL:-https://api.opentyphoon.ai/v1}
+      - TYPHOON_MODEL=${TYPHOON_MODEL:-typhoon-v2.1-12b-instruct}
+      - UTILITY_LLM_MODEL=${UTILITY_LLM_MODEL:-llama3.2:3b}
+      - GENERATION_LLM_MODEL=${GENERATION_LLM_MODEL:-llama3.2:8b}
+      - GRAPH_LLM_MODEL=${GRAPH_LLM_MODEL:-typhoon-v2.5-30b-a3b-instruct}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-bge-m3}
+      - OLLAMA_LLM_MODEL_SIMPLE=${OLLAMA_LLM_MODEL_SIMPLE:-llama3.2:3b}
+      - OLLAMA_LLM_MODEL_COMPLEX=${OLLAMA_LLM_MODEL_COMPLEX:-llama3.1:70b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+      - CHROMA_COLLECTION_PREFIX=${CHROMA_COLLECTION_PREFIX:-rag_1024}
+      - OLLAMA_EMBEDDING_CONCURRENCY=${OLLAMA_EMBEDDING_CONCURRENCY:-4}
+      - CHUNKER_STRATEGY=${CHUNKER_STRATEGY:-fixed}
+      - SEMANTIC_CHUNK_MAX_TOKENS=${SEMANTIC_CHUNK_MAX_TOKENS:-256}
+      - SEMANTIC_CHUNK_SIMILARITY_THRESHOLD=${SEMANTIC_CHUNK_SIMILARITY_THRESHOLD:-0.65}
+      - GRAPH_EXTRACTOR_BACKEND=${GRAPH_EXTRACTOR_BACKEND:-llm}
+      - LLM_FALLBACK_ENABLED=${LLM_FALLBACK_ENABLED:-false}
+      - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-openai}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=ingestion-service
+      - RAG_API_KEY=${RAG_API_KEY:-}
+      - RAG_REQUIRE_DB_API_KEYS=${RAG_REQUIRE_DB_API_KEYS:-false}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  knowledge-connector:
+    build: ./ingestion/knowledge-connector
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "8006:8006"
+    environment:
+      - INGESTION_SERVICE_URL=${INGESTION_SERVICE_URL:-http://ingestion-service:8001}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - CODE_EXECUTOR_BACKEND=${CODE_EXECUTOR_BACKEND:-local}
+      - CODE_EXECUTOR_TIMEOUT_SECONDS=${CODE_EXECUTOR_TIMEOUT_SECONDS:-10}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - SCRAPE_DOMAIN_BLOCKLIST=${SCRAPE_DOMAIN_BLOCKLIST:-localhost,169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      - SCRAPE_DOMAIN_ALLOWLIST=${SCRAPE_DOMAIN_ALLOWLIST:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=knowledge-connector
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # INTELLIGENCE LAYER
+  # ---------------------------------------------------------------------------
+
+  intelligence-service:
+    build:
+      context: .
+      dockerfile: intelligence/intelligence-service/Dockerfile
+    <<: [*default-restart, *resource-medium]
+    ports:
+      - "8003:8003"
+    environment:
+      - POSTGRES_URL=${POSTGRES_URL}
+      - INGESTION_SERVICE_URL=${INGESTION_SERVICE_URL:-http://ingestion-service:8001}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - UTILITY_LLM_PROVIDER=${UTILITY_LLM_PROVIDER:-ollama}
+      - GENERATION_LLM_PROVIDER=${GENERATION_LLM_PROVIDER:-ollama}
+      - GRAPH_LLM_PROVIDER=${GRAPH_LLM_PROVIDER:-ollama}
+      - GAP_DRAFT_LLM_PROVIDER=${GAP_DRAFT_LLM_PROVIDER:-ollama}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:0.6b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.2:8b}
+      - TYPHOON_API_KEY=${TYPHOON_API_KEY:-}
+      - TYPHOON_BASE_URL=${TYPHOON_BASE_URL:-https://api.opentyphoon.ai/v1}
+      - TYPHOON_MODEL=${TYPHOON_MODEL:-typhoon-v2.1-12b-instruct}
+      - UTILITY_LLM_MODEL=${UTILITY_LLM_MODEL:-llama3.2:3b}
+      - GENERATION_LLM_MODEL=${GENERATION_LLM_MODEL:-llama3.2:8b}
+      - GRAPH_LLM_MODEL=${GRAPH_LLM_MODEL:-typhoon-v2.5-30b-a3b-instruct}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANALYSIS_INTERVAL_HOURS=${ANALYSIS_INTERVAL_HOURS:-24}
+      - CANDIDATE_EXPIRY_DAYS=${CANDIDATE_EXPIRY_DAYS:-30}
+      - EVALUATION_SAMPLE_RATE=${EVALUATION_SAMPLE_RATE:-0.10}
+      - CLUSTERING_MIN_CLUSTER_SIZE=${CLUSTERING_MIN_CLUSTER_SIZE:-5}
+      - CLUSTERING_METRIC=${CLUSTERING_METRIC:-cosine}
+      - INTELLIGENCE_JOB_LOCK_TTL_SECONDS=${INTELLIGENCE_JOB_LOCK_TTL_SECONDS:-3600}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}
+      - OTEL_SERVICE_NAME=intelligence-service
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # DATA LAYER
+  # ---------------------------------------------------------------------------
+
+  chromadb:
+    image: chromadb/chroma:latest
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "8004:8000"
+    volumes:
+      - chroma-data:/data
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - ANONYMIZED_TELEMETRY=false
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  neo4j:
+    image: neo4j:5
+    <<: [*default-restart, *resource-heavy]
+    pids_limit: 200
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_server_memory_pagecache_size=128M
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER:-neo4j}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 120s
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    <<: [*default-restart, *resource-light]
+    command: postgres -c max_connections=100 -c shared_buffers=64MB -c effective_cache_size=192MB
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=ragdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "ragdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "5433:5432"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ragdb
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-128mb} --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # OBSERVABILITY
+  # ---------------------------------------------------------------------------
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    <<: [*default-restart, *resource-light]
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTel gRPC collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - rag-network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # OPERATIONS
+  # ---------------------------------------------------------------------------
+
+  backup:
+    image: alpine:latest
+    restart: unless-stopped
+    <<: *resource-light
+    entrypoint: >
+      /bin/sh -c "
+        apk add --no-cache rclone postgresql-client &&
+        if [ \"$$BACKUP_DESTINATION\" = \"s3\" ] && [ -z \"$$BACKUP_S3_BUCKET\" ]; then
+          echo '[backup] BACKUP_S3_BUCKET is empty; backup service disabled.' &&
+          sleep infinity;
+        fi &&
+        while true; do
+          echo '[backup] Starting backup run...' &&
+          pg_dump $$POSTGRES_URL > /tmp/ragdb_$$(date +%Y%m%d_%H%M%S).sql &&
+          rclone copy /tmp/ $$BACKUP_DESTINATION:$$BACKUP_S3_BUCKET/postgres/ --max-age $$BACKUP_RETENTION_DAYS'd' &&
+          rm -f /tmp/*.sql &&
+          echo '[backup] Done. Sleeping 24h...' &&
+          sleep 86400;
+        done
+      "
+    environment:
+      - POSTGRES_URL=${POSTGRES_URL}
+      - BACKUP_DESTINATION=${BACKUP_DESTINATION:-s3}
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    networks:
+      - rag-network
+    logging: *default-logging
