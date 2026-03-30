@@ -20,7 +20,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className="bg-gray-950 text-white min-h-screen flex overflow-hidden">
+      <body className="bg-gray-950 text-white h-screen flex overflow-hidden">
         {showSidebar ? (
           <Sidebar
             user={{
@@ -29,7 +29,7 @@ export default async function RootLayout({
             }}
           />
         ) : null}
-        <main className={`flex-1 min-h-0 overflow-y-auto ${showSidebar ? 'ml-56' : ''}`}>
+        <main className={`flex-1 h-screen min-h-0 overflow-y-auto overflow-x-hidden ${showSidebar ? 'ml-56' : ''}`}>
           <ChatDraftProvider>
             {children}
           </ChatDraftProvider>
