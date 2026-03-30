@@ -129,6 +129,21 @@ This is the recommended order for first-time readers:
 4. Read `Task` to connect the architecture to the actual code
 5. Read the walkthroughs to follow concrete request flows
 
+## What to read for
+
+If you already know what you want to understand, jump directly to the matching page:
+
+| Goal | Read this |
+|---|---|
+| Boot the stack locally | [Environment](environment.md) |
+| Understand product behavior | [Requirement](requirement.md) |
+| Understand boundaries and adapters | [Design](design.md) |
+| Find the implementation location | [Task](task.md) |
+| Trace document ingestion | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| Trace question answering | [Query walkthrough](query-walkthrough.md) |
+| Understand service ownership | [Service Map](#service-map) |
+| Follow the recommended learning order | [Reading Graph](#reading-graph) |
+
 ## Walkthroughs
 
 Use these pages when you want to follow a request step by step through the actual code path:

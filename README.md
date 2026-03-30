@@ -100,6 +100,20 @@ If you are learning the system, the shortest path is:
 5. [Ingestion walkthrough](docs/ingestion-walkthrough.md) - follow one document through the ingest pipeline
 6. [Query walkthrough](docs/query-walkthrough.md) - follow one question through the answer pipeline
 
+## Flow Index
+
+Use this as a one-page jump list when you want to open the right learning path quickly:
+
+- [Documentation index](docs/README.md) - complete learning path and service map
+- [Service map](docs/README.md#service-map) - runtime boundaries and data ownership
+- [Reading graph](docs/README.md#reading-graph) - recommended order for first-time readers
+- [Environment](docs/environment.md) - startup variables and local boot checklist
+- [Requirement](docs/requirement.md) - what the system must do
+- [Design](docs/design.md) - how the system is structured
+- [Task](docs/task.md) - where the implementation lives
+- [Ingestion walkthrough](docs/ingestion-walkthrough.md) - how a document becomes searchable
+- [Query walkthrough](docs/query-walkthrough.md) - how a question becomes an answer
+
 ## RAG Glossary
 
 - `retrieval` - finding the most relevant documents or chunks for a query

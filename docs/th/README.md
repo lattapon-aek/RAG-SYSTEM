@@ -121,6 +121,21 @@ flowchart TB
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
 
+## อ่านเรื่องอะไรดี
+
+ถ้ารู้อยู่แล้วว่าอยากเข้าใจเรื่องไหน ให้กระโดดไปหน้าที่ตรงกับเป้าหมายได้เลย:
+
+| เป้าหมาย | อ่านไฟล์นี้ |
+|---|---|
+| บูตระบบ local | [Environment](environment.md) |
+| เข้าใจพฤติกรรมที่ระบบต้องทำ | [Requirement](requirement.md) |
+| เข้าใจ boundary และ adapter | [Design](design.md) |
+| หาโค้ดที่ implement งานนั้น | [Task](task.md) |
+| ไล่ flow การ ingest เอกสาร | [Ingestion walkthrough](ingestion-walkthrough.md) |
+| ไล่ flow การตอบคำถาม | [Query walkthrough](query-walkthrough.md) |
+| เข้าใจการแบ่ง ownership ของ service | [Service Map](#service-map) |
+| ตามลำดับอ่านที่แนะนำ | [System Flow](#system-flow) |
+
 ## หมายเหตุ
 
 - เอกสารภาษาอังกฤษใน `docs/` เป็นเอกสารหลัก
