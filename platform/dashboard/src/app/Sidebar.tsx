@@ -227,7 +227,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/memory',
-        label: 'Memory by user_id',
+        label: 'Memory Profiles',
         minRole: 'operator',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

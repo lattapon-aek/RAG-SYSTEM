@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import type { MemoryStats } from '@/types'
 
 type Backend = 'all' | 'short' | 'long'
@@ -20,6 +21,11 @@ interface MemoryUser {
   user_id: string
   entry_count: number
   last_updated?: string
+}
+
+function getRouteProfile(value: string | string[] | undefined) {
+  if (!value) return ''
+  return Array.isArray(value) ? value[0] ?? '' : value
 }
 
 const TAB_ITEMS: { id: Tab; label: string }[] = [
@@ -73,6 +79,7 @@ function SourceBadge({ source }: { source?: string }) {
 
 export default function MemoryUI() {
   const searchParams = useSearchParams()
+  const params = useParams<{ profile?: string }>()
   const [tab, setTab] = useState<Tab>('report')
   const [backend, setBackend] = useState<Backend>('all')
   const [stats, setStats] = useState<MemoryStats | null>(null)
@@ -147,23 +154,29 @@ export default function MemoryUI() {
     }
   }
 
+  const routeProfile = useMemo(() => {
+    const fromParams = getRouteProfile(params?.profile)
+    return decodeURIComponent((fromParams || searchParams.get('profile') || searchParams.get('user') || '').trim())
+  }, [params, searchParams])
+
   useEffect(() => {
     void loadReport()
-    const u = searchParams.get('user')
-    if (u) {
-      setUserId(u)
-      setAddUserId(u)
-      void loadMemory(u, backend)
+    if (routeProfile) {
+      setUserId(routeProfile)
+      setAddUserId(routeProfile)
+      void loadMemory(routeProfile, backend)
       setTab('browse')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [routeProfile])
 
   const filteredUsers = useMemo(() => {
     const q = reportSearch.trim().toLowerCase()
     if (!q) return users
     return users.filter((u) => u.user_id.toLowerCase().includes(q))
   }, [users, reportSearch])
+
+  const hasActiveProfile = !!routeProfile
 
   const memoryTypes = useMemo(() => {
     const s = new Set<string>()
@@ -349,9 +362,9 @@ export default function MemoryUI() {
       <div className="border-b border-gray-800 px-6 pb-4 pt-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">Memory by user_id</h2>
+            <h2 className="text-lg font-semibold text-white">Memory Profiles</h2>
             <p className="mt-0.5 text-xs text-gray-400">
-              Report, browse, add, and manage memory entries. user_id is the lookup key, not a dashboard user.
+              Report profiles here. Open a profile to browse, add, and manage memory entries.
             </p>
           </div>
           <div className="flex gap-2">
@@ -364,22 +377,6 @@ export default function MemoryUI() {
               <span className="font-mono text-xs text-green-300">Postgres · permanent</span>
             </span>
           </div>
-        </div>
-      </div>
-
-      <div className="px-6 pt-4">
-        <div className="flex gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1">
-          {TAB_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setTab(item.id)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === item.id ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -404,7 +401,7 @@ export default function MemoryUI() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Memory Report</h3>
-                    <p className="mt-1 text-xs text-gray-500">List of user_id buckets currently known to the system.</p>
+                    <p className="mt-1 text-xs text-gray-500">List of profiles currently known to the system.</p>
                   </div>
                   <button onClick={() => void loadReport()} className={btnGhost}>
                     Refresh
@@ -414,8 +411,8 @@ export default function MemoryUI() {
                 {reportError && <p className="mb-3 text-sm text-red-400">{reportError}</p>}
 
                 <div className="mb-4">
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">Search user_id</label>
-                  <input value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className={inputCls} placeholder="Search user_id" />
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">Search profile</label>
+                  <input value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className={inputCls} placeholder="Search profile" />
                 </div>
 
                 {reportLoading ? (
@@ -423,11 +420,11 @@ export default function MemoryUI() {
                     {[...Array(4)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-gray-800/50 animate-pulse" />)}
                   </div>
                 ) : filteredUsers.length === 0 ? (
-                  <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-6 text-sm text-gray-400">No memory users found.</div>
+                  <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-6 text-sm text-gray-400">No profiles found.</div>
                 ) : (
                   <div className="overflow-hidden rounded-xl border border-gray-800">
                     <div className="grid grid-cols-[2fr_0.8fr_1fr_1.5fr] gap-4 border-b border-gray-800 bg-gray-950/80 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                      <span>user_id</span>
+                      <span>Profile</span>
                       <span>Entries</span>
                       <span>Last Updated</span>
                       <span>Actions</span>
@@ -439,35 +436,12 @@ export default function MemoryUI() {
                           <span className="text-yellow-300">{u.entry_count}</span>
                           <span className="text-gray-300">{formatDate(u.last_updated)}</span>
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => {
-                                setUserId(u.user_id)
-                                setTab('browse')
-                                void loadMemory(u.user_id, backend)
-                              }}
+                            <Link
+                              href={`/memory/${encodeURIComponent(u.user_id)}`}
                               className={btnGhost}
                             >
-                              Browse
-                            </button>
-                            <button
-                              onClick={() => {
-                                setUserId(u.user_id)
-                                setTab('manage')
-                                void loadMemory(u.user_id, backend)
-                              }}
-                              className="rounded-lg border border-purple-700/60 px-3 py-2 text-xs text-purple-200 hover:bg-purple-900/30"
-                            >
-                              Manage
-                            </button>
-                            <button
-                              onClick={() => {
-                                setAddUserId(u.user_id)
-                                setTab('add')
-                              }}
-                              className="rounded-lg border border-blue-700/60 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/30"
-                            >
-                              Add
-                            </button>
+                              Open
+                            </Link>
                           </div>
                         </div>
                       ))}
@@ -478,7 +452,25 @@ export default function MemoryUI() {
             </>
           )}
 
-          {tab === 'browse' && (
+          {hasActiveProfile && (
+            <div className="pt-4">
+              <div className="flex gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1">
+                {TAB_ITEMS.filter((item) => item.id !== 'report').map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setTab(item.id)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      tab === item.id ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hasActiveProfile && tab === 'browse' && (
             <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
               <div className="mb-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Browse Memory</h3>
@@ -487,8 +479,8 @@ export default function MemoryUI() {
 
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1">
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">user_id</label>
-                  <input value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void loadMemory(userId, backend)} className={inputCls} placeholder="Enter user_id" />
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">Profile</label>
+                  <input value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void loadMemory(userId, backend)} className={inputCls} placeholder="Enter profile" />
                 </div>
                 <button onClick={() => void loadMemory(userId, backend)} disabled={!userId.trim() || listLoading} className={btnCls}>
                   {listLoading ? 'Loading…' : 'Load'}
@@ -581,17 +573,17 @@ export default function MemoryUI() {
             </div>
           )}
 
-          {tab === 'add' && (
+          {hasActiveProfile && tab === 'add' && (
             <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
               <div className="mb-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Add Memory</h3>
-                <p className="mt-1 text-xs text-gray-500">Write a memory entry to a user_id bucket. This does not create a user account.</p>
+                <p className="mt-1 text-xs text-gray-500">Write a memory entry to a profile bucket. This does not create a dashboard user.</p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs text-gray-500">user_id</label>
-                  <input value={addUserId} onChange={(e) => setAddUserId(e.target.value)} className={inputCls} placeholder="e.g. user123" />
+                  <label className="mb-1 block text-xs text-gray-500">Profile</label>
+                  <input value={addUserId} onChange={(e) => setAddUserId(e.target.value)} className={inputCls} placeholder="e.g. profile-123" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-gray-500">Save to</label>
@@ -623,17 +615,17 @@ export default function MemoryUI() {
             </div>
           )}
 
-          {tab === 'manage' && (
+          {hasActiveProfile && tab === 'manage' && (
             <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
               <div className="mb-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Manage Memory</h3>
-                <p className="mt-1 text-xs text-gray-500">Delete entries or clear a user_id bucket. This is memory management, not user management.</p>
+                <p className="mt-1 text-xs text-gray-500">Delete entries or clear a profile bucket. This is memory management, not user management.</p>
               </div>
 
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-gray-500">user_id</label>
-                  <input value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void loadMemory(userId, backend)} className={inputCls} placeholder="Enter user_id" />
+                  <label className="mb-1 block text-xs text-gray-500">Profile</label>
+                  <input value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void loadMemory(userId, backend)} className={inputCls} placeholder="Enter profile" />
                 </div>
                 <button onClick={() => void loadMemory(userId, backend)} disabled={!userId.trim() || listLoading} className={btnCls}>
                   {listLoading ? 'Loading…' : 'Load'}
@@ -675,7 +667,7 @@ export default function MemoryUI() {
                 </>
               ) : (
                 <div className="mt-4 rounded-xl border border-gray-800 bg-gray-950/60 p-6 text-sm text-gray-400">
-                  Load a user_id first to manage its memory entries.
+                  Load a profile first to manage its memory entries.
                 </div>
               )}
             </div>

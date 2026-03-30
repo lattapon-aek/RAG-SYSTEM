@@ -46,7 +46,7 @@ const DEFAULT_PARAMS: QueryParams = {
 const PARAM_DOCS: Record<string, string> = {
   namespace: 'Knowledge scope to query — comma-separated for multi-namespace (e.g. "hr, legal"). Independent from client_id/user_id.',
   client_id: 'Caller identity for quota and rate-limit tracking. Not the same as user_id.',
-  user_id: 'End-user identity for memory context. Not the same as client_id.',
+  user_id: 'Profile identity for memory context. Not the same as client_id.',
   top_k: 'Number of chunks to retrieve from vector store',
   top_n_rerank: 'Number of results after reranking',
   max_context_tokens: 'Max tokens to pass to LLM as context',
@@ -349,7 +349,7 @@ export default function ChatUI() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] text-gray-600 mb-1 block">User ID</label>
+                <label className="text-[10px] text-gray-600 mb-1 block">Profile</label>
                 <input
                   value={params.user_id}
                   onChange={(e) => setParams((p) => ({ ...p, user_id: e.target.value }))}

@@ -232,8 +232,8 @@ interface PNode {
 const PIPELINE_NODES: PNode[] = [
   { id: 'query',    label: 'Query In',        icon: '⬦',  sublabel: 'embed → vector',           x: 4,   y: 101, w: 70,  h: 26, color: '#4b5563', group: 'always' },
   { id: 'cache',    label: 'Semantic Cache',  icon: '⚡', sublabel: 'Redis',                    x: 96,  y: 36,  w: 94,  h: 26, color: '#7c3aed', group: 'full' },
-  { id: 'shortmem', label: 'Short Memory',   icon: '◎',  sublabel: 'Redis · user_id',           x: 96,  y: 101, w: 94,  h: 26, color: '#0891b2', group: 'full' },
-  { id: 'longmem',  label: 'Long Memory',    icon: '⊙',  sublabel: 'PG · user_id',              x: 96,  y: 166, w: 94,  h: 26, color: '#0891b2', group: 'full' },
+  { id: 'shortmem', label: 'Short Memory',   icon: '◎',  sublabel: 'Redis · profile',          x: 96,  y: 101, w: 94,  h: 26, color: '#0891b2', group: 'full' },
+  { id: 'longmem',  label: 'Long Memory',    icon: '⊙',  sublabel: 'PG · profile',             x: 96,  y: 166, w: 94,  h: 26, color: '#0891b2', group: 'full' },
   { id: 'qintel',   label: 'Query Intel.',   icon: '✦',  sublabel: 'rewrite/HyDE',              x: 212, y: 101, w: 92,  h: 26, color: '#8b5cf6', group: 'full' },
   { id: 'vector',   label: 'Vector Search',  icon: '⊕',  sublabel: 'ChromaDB',                  x: 328, y: 68,  w: 92,  h: 26, color: '#2563eb', group: 'retrieve' },
   { id: 'graph',    label: 'Graph Augment',  icon: '⬡',  sublabel: 'Neo4j',                     x: 328, y: 140, w: 92,  h: 26, color: '#059669', group: 'retrieve-graph' },
@@ -393,7 +393,7 @@ function renderNodeBody(
   }
 
   if (nodeId === 'shortmem') {
-    if (!isActive) return <p className="text-gray-500 text-[11px]">Memory disabled — enable <span className="text-cyan-400">Memory</span> toggle and set a user_id.</p>
+    if (!isActive) return <p className="text-gray-500 text-[11px]">Memory disabled — enable <span className="text-cyan-400">Memory</span> toggle and set a profile.</p>
     const count = meta?.entry_count as number | undefined
     return (
       <div className="space-y-2">
@@ -402,7 +402,7 @@ function renderNodeBody(
           <span className="text-gray-400 text-sm">recent turns loaded</span>
         </div>
         <StatGrid items={[{ label: 'Latency', value: ms(timing) }, { label: 'Store', value: 'Redis' }]} />
-        {(count ?? 0) === 0 && <p className="text-[10px] text-gray-600">No conversation history found for this user_id.</p>}
+        {(count ?? 0) === 0 && <p className="text-[10px] text-gray-600">No conversation history found for this profile.</p>}
         {cfg && <ConfigBlock items={[
           { env: 'ENABLE_MEMORY',  value: cfg.enableMemory },
           { env: 'MEMORY_BACKEND', value: cfg.memoryBackend },
@@ -412,7 +412,7 @@ function renderNodeBody(
   }
 
   if (nodeId === 'longmem') {
-    if (!isActive) return <p className="text-gray-500 text-[11px]">Memory disabled — enable <span className="text-cyan-400">Memory</span> toggle and set a user_id.</p>
+    if (!isActive) return <p className="text-gray-500 text-[11px]">Memory disabled — enable <span className="text-cyan-400">Memory</span> toggle and set a profile.</p>
     const count = meta?.entry_count as number | undefined
     return (
       <div className="space-y-2">
@@ -2242,13 +2242,13 @@ export default function KnowledgePreviewUI() {
             {/* Per-user accordion */}
             <div className="rounded-xl border border-gray-800 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 bg-gray-800/40 border-b border-gray-800">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">User Memory Report</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Profile Memory Report</p>
                 <a
                   href="/memory"
                   target="_blank"
                   className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
                 >
-                  Manage in Memory Manager
+                  Manage in Memory Profiles
                   <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                     <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
@@ -2264,11 +2264,11 @@ export default function KnowledgePreviewUI() {
                 </div>
               ) : memoryUsers.length === 0 ? (
                 <div className="py-10 text-center text-gray-600">
-                  <p className="text-sm">No users found</p>
+                  <p className="text-sm">No profiles found</p>
                   <p className="text-xs mt-1">
                     Add memory at{' '}
                     <a href="/memory" target="_blank" className="text-purple-500 hover:text-purple-400 underline">
-                      Memory Manager →
+                      Memory Profiles →
                     </a>
                   </p>
                 </div>

@@ -107,7 +107,7 @@ export default function ReportUI() {
     { id: 'performance', label: 'Performance' },
     { id: 'knowledge', label: 'Knowledge Base' },
     { id: 'quality', label: 'Answer Quality' },
-    { id: 'users', label: 'Memory Users' },
+    { id: 'users', label: 'Memory Profiles' },
   ]
 
   return (
@@ -353,7 +353,7 @@ export default function ReportUI() {
 
         {activeTab === 'users' && (
           <section>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Memory Users</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Memory Profiles</h2>
             {loading ? (
               <div className="space-y-2">
                 {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-gray-800/40 rounded-xl animate-pulse" />)}
@@ -363,14 +363,14 @@ export default function ReportUI() {
                 <svg className="w-10 h-10 mx-auto mb-3 text-gray-600 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <p className="text-sm text-gray-500">No memory users yet</p>
+                <p className="text-sm text-gray-500">No memory profiles yet</p>
               </div>
             ) : (
               <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-700/50">
-                      <th className="text-left text-xs text-gray-500 px-4 py-3 font-medium">User ID</th>
+                      <th className="text-left text-xs text-gray-500 px-4 py-3 font-medium">Profile</th>
                       <th className="text-right text-xs text-gray-500 px-4 py-3 font-medium">Entries</th>
                       <th className="text-right text-xs text-gray-500 px-4 py-3 font-medium">Last Updated</th>
                       <th className="px-4 py-3" />
@@ -391,9 +391,9 @@ export default function ReportUI() {
                         <td className="px-4 py-3 text-right text-xs text-gray-500">{formatDate(u.last_updated)}</td>
                         <td className="px-4 py-3 text-right">
                           <Link
-                            href={`/memory?user=${encodeURIComponent(u.user_id)}`}
-                            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                          >
+                          href={`/memory/${encodeURIComponent(u.user_id)}`}
+                          className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                        >
                             View →
                           </Link>
                         </td>
