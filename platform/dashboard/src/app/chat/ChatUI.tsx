@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { chatStore, type Message, type ChatSession } from './draftStore'
+import type { ChatIdentityRecord } from '@/types'
 
 interface Citation {
   chunk_id: string
@@ -102,6 +103,8 @@ export default function ChatUI() {
   const [showPayload, setShowPayload] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [profiles, setProfiles] = useState<ChatIdentityRecord[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -118,6 +121,35 @@ export default function ChatUI() {
     return () => {
       chatStore.subscribe(null)
       chatStore.subscribeLoading(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadProfiles() {
+      try {
+        const res = await fetch('/api/chat-identities')
+        const data = await res.json().catch(() => [])
+        if (!res.ok) return
+        if (!cancelled) {
+          const rows = Array.isArray(data) ? (data as ChatIdentityRecord[]) : []
+          setProfiles(rows)
+          if (rows.length === 1) {
+            setSelectedProfileId(rows[0].id)
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setProfiles([])
+        }
+      }
+    }
+
+    void loadProfiles()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -145,6 +177,15 @@ export default function ChatUI() {
     p.use_decompose = params.use_decompose
     p.use_graph = params.use_graph
     return p
+  }
+
+  function applyProfile(profile: ChatIdentityRecord) {
+    setParams((current) => ({
+      ...current,
+      namespace: profile.namespace || 'default',
+      client_id: profile.client_id,
+      user_id: profile.user_id,
+    }))
   }
 
   async function send() {
@@ -337,6 +378,37 @@ export default function ChatUI() {
           {/* Context */}
           <div className="px-4 pt-3 pb-2 space-y-2">
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Context</p>
+            <div>
+              <label className="text-[10px] text-gray-600 mb-1 block">Saved profile</label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedProfileId}
+                  onChange={(e) => setSelectedProfileId(e.target.value)}
+                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 focus:border-purple-600 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none transition-colors"
+                >
+                  <option value="">Select a chat identity…</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} · {profile.namespace}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const profile = profiles.find((item) => item.id === selectedProfileId)
+                    if (profile) applyProfile(profile)
+                  }}
+                  disabled={!selectedProfileId || profiles.length === 0}
+                  className="rounded-lg border border-gray-700 px-3 py-1.5 text-[10px] font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] text-gray-600">
+                Admin-managed preset for the Chat page and MCP handoff.
+              </p>
+            </div>
             <div>
               <label className="text-[10px] text-gray-600 mb-1 block">Namespace(s)</label>
               <input
