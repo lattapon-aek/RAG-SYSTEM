@@ -48,3 +48,12 @@ RAG_API_KEY=
 - ค่า service URL ส่วนใหญ่ตั้งค่า default เป็นชื่อ service ใน Docker Compose อยู่แล้ว
 - cloud provider keys เช่น `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, และ `TYPHOON_API_KEY` เป็นตัวเลือกเสริม เว้นแต่คุณ route traffic ไป provider เหล่านั้น
 - ใน `.env.example` มีคอมเมนต์อธิบายไว้เยอะอยู่แล้ว ให้ถือเป็นแหล่งอ้างอิงหลักสำหรับตัวเลือกทั้งหมด
+
+## เอกสารที่เกี่ยวข้อง
+
+ถ้าต้องการเชื่อมการตั้งค่า environment กับเส้นทางการเรียนรู้ที่เหลือ ให้อ่าน:
+
+- [Documentation index](README.md)
+- [Requirement](requirement.md) เพื่อดูเป้าหมายของระบบที่ตัวแปรพวกนี้รองรับ
+- [Design](design.md) เพื่อดู boundary ของ service ที่ใช้ค่าพวกนี้
+- [Task](task.md) เพื่อดูจุดที่ configuration มีผลต่อ implementation

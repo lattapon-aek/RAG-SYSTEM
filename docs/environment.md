@@ -48,3 +48,12 @@ RAG_API_KEY=
 - Most service URLs default to Docker Compose service names.
 - Cloud provider keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `TYPHOON_API_KEY` are optional unless you route traffic to those providers.
 - The repo ships with extensive inline comments in `.env.example`; use that file as the source of truth for the full set of knobs.
+
+## Related docs
+
+If you want to connect environment setup to the rest of the learning path, read:
+
+- [Documentation index](README.md)
+- [Requirement](requirement.md) for the system goals behind these variables
+- [Design](design.md) for the service boundaries that consume these variables
+- [Task](task.md) for the implementation areas affected by configuration

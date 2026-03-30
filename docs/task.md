@@ -7,6 +7,11 @@ If you want to see these tasks as real execution paths, read:
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
 
+If you want to trace the same tasks back to the higher-level docs, read:
+
+- [Requirement](requirement.md) for the expected behavior
+- [Design](design.md) for the architecture and service boundaries
+
 ## Ingestion tasks
 
 - Implement file and text ingestion endpoints

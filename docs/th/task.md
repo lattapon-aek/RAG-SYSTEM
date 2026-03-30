@@ -9,6 +9,11 @@
 - [Ingestion walkthrough](ingestion-walkthrough.md)
 - [Query walkthrough](query-walkthrough.md)
 
+ถ้าต้องการไล่ย้อนกลับจากงานเหล่านี้ไปยังเอกสารระดับสูง ให้อ่าน:
+
+- [Requirement](requirement.md) เพื่อดูพฤติกรรมที่ระบบคาดหวัง
+- [Design](design.md) เพื่อดูสถาปัตยกรรมและ boundary ของ service
+
 ### งานฝั่ง ingestion
 
 - ทำ endpoint สำหรับรับไฟล์และข้อความ
