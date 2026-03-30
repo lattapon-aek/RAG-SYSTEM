@@ -98,6 +98,36 @@ If you are learning the system, the shortest path is:
 3. [Design](docs/design.md) - understand the architecture and boundaries
 4. [Task](docs/task.md) - inspect how the behavior is implemented in code
 
+## How RAG Flows Through This Repo
+
+The practical learning path is to follow the data flow across services:
+
+```text
+User input
+  -> Dashboard or MCP client
+  -> RAG service or ingestion service
+  -> Redis job queue or query pipeline
+  -> Parser / chunker / embedding / graph / reranker adapters
+  -> ChromaDB / PostgreSQL / Neo4j
+  -> Answer, preview, job status, or graph result
+```
+
+Common entry points:
+
+- `platform/dashboard` starts user-facing actions
+- `platform/mcp-server` exposes programmatic access
+- `ingestion/ingestion-service` handles file/text ingestion and preview
+- `core/rag-service` handles question answering and retrieval
+- `core/graph-service` handles graph extraction and graph queries
+- `intelligence/intelligence-service` handles scheduled analysis and review jobs
+
+What to look for while reading:
+
+- `interface/routers.py` for API shape
+- `interface/dependencies.py` for wiring
+- `application/*` for business flow
+- `infrastructure/adapters/*` for concrete integrations
+
 ## Repository Layout
 
 - `core/` - query, graph, and reranking services

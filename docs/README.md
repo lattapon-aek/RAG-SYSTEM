@@ -15,6 +15,26 @@ Return to the main project page: [README](../README.md)
 | 3 | [Design](design.md) | Understand how the system is structured |
 | 4 | [Task](task.md) | See the concrete implementation work in the repo |
 
+## System Flow
+
+```text
+User / operator
+  -> Dashboard or MCP server
+  -> Service entrypoint
+  -> API router and dependency wiring
+  -> Application use case
+  -> Infrastructure adapter
+  -> Database / vector store / graph store / queue
+  -> Response back to the caller
+```
+
+Reading the flow from top to bottom helps connect the docs to the codebase:
+
+1. `Environment` shows what the system needs to start
+2. `Requirement` shows what the system is supposed to do
+3. `Design` shows how the services and layers are split
+4. `Task` shows where the behavior lives in code
+
 ## English docs
 
 - [Environment](environment.md)
