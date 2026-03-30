@@ -10,6 +10,7 @@ This folder contains the project documentation in English, with Thai supplementa
 
 ## Thai supplemental docs
 
+- [Thai docs index](th/README.md)
 - [Requirement - Thai](th/requirement.md)
 - [Design - Thai](th/design.md)
 - [Task - Thai](th/task.md)

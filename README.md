@@ -1,6 +1,8 @@
 # RAG System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/Docs-README-blue)](docs/README.md)
+[![Thai Docs](https://img.shields.io/badge/Docs-Thai%20supplemental-lightgrey)](docs/th/README.md)
 
 Microservices-based Retrieval Augmented Generation platform for document ingestion, query, graph, intelligence, dashboard, and MCP access.
 
@@ -34,6 +36,7 @@ docker compose up -d --build
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Thai documentation index](docs/th/README.md)
 - [Requirement](docs/requirement.md)
 - [Design](docs/design.md)
 - [Task](docs/task.md)
