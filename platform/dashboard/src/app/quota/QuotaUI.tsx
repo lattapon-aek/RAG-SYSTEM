@@ -3,11 +3,22 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type {
   AdminConfigAuditLogEntry,
+  ApiKeyRecord,
   QuotaStats,
   RateLimitConfigStats,
   RateLimitStats,
 } from '@/types'
 import Tabs from '@/components/Tabs'
+
+interface ClientReportRow {
+  client_id: string
+  total_keys: number
+  active_keys: number
+  revoked_keys: number
+  labels: string[]
+  latest_created_at: string | null
+  latest_used_at: string | null
+}
 
 // ── Sparkline ───────────────────────────────────────────────────────────────
 function Sparkline({ data }: { data: number[] }) {
@@ -67,7 +78,7 @@ function sourceLabel(source?: 'runtime' | 'persistent' | 'env' | null, hasOverri
 }
 
 const QUOTA_TABS = [
-  { id: 'create', label: 'Register Client' },
+  { id: 'report', label: 'Client Report' },
   { id: 'lookup', label: 'Lookup Client' },
   { id: 'manage', label: 'Manage Limits' },
   { id: 'live', label: 'Live Rate Limits' },
@@ -75,20 +86,18 @@ const QUOTA_TABS = [
 ]
 
 export default function QuotaUI() {
-  const [activeTab, setActiveTab] = useState('create')
+  const [activeTab, setActiveTab] = useState('report')
 
+  const [clientKeys, setClientKeys] = useState<ApiKeyRecord[]>([])
+  const [clientReportSearch, setClientReportSearch] = useState('')
+  const [clientReportLoading, setClientReportLoading] = useState(false)
+  const [clientReportError, setClientReportError] = useState('')
   const [rateLimit, setRateLimit] = useState<RateLimitStats | null>(null)
   const [rateConfig, setRateConfig] = useState<RateLimitConfigStats | null>(null)
   const [auditLog, setAuditLog] = useState<AdminConfigAuditLogEntry[]>([])
   const [rateError, setRateError] = useState('')
   // sparkline history: Map<client_id, last-12 request counts>
   const rateHistory = useRef<Map<string, number[]>>(new Map())
-  const [createClientId, setCreateClientId] = useState('')
-  const [createLabel, setCreateLabel] = useState('')
-  const [createdClientKey, setCreatedClientKey] = useState<string | null>(null)
-  const [createError, setCreateError] = useState('')
-  const [createMessage, setCreateMessage] = useState('')
-  const [creatingClient, setCreatingClient] = useState(false)
   const [clientId, setClientId] = useState('')
   const [quota, setQuota] = useState<QuotaStats | null>(null)
   const [quotaError, setQuotaError] = useState('')
@@ -130,48 +139,30 @@ export default function QuotaUI() {
     }
   }
 
+  async function refreshClientReport() {
+    setClientReportLoading(true)
+    setClientReportError('')
+    try {
+      const res = await fetch('/api/api-keys')
+      const data = await res.json().catch(() => [])
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setClientKeys(Array.isArray(data) ? data : [])
+    } catch (err: unknown) {
+      setClientReportError(err instanceof Error ? err.message : 'Failed to load client report')
+      setClientKeys([])
+    } finally {
+      setClientReportLoading(false)
+    }
+  }
+
   useEffect(() => {
+    void refreshClientReport()
     void refreshRateLimitStats()
     void refreshAuditLog()
     const id = setInterval(() => void refreshRateLimitStats(), 20_000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  async function createClient() {
-    const normalizedClientId = createClientId.trim()
-    setCreateError('')
-    setCreateMessage('')
-    setCreatedClientKey(null)
-
-    if (!normalizedClientId) {
-      setCreateError('Client ID is required')
-      return
-    }
-
-    setCreatingClient(true)
-    try {
-      const res = await fetch('/api/api-keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: normalizedClientId,
-          label: createLabel.trim() || null,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      setCreatedClientKey(data.plaintext_key ?? null)
-      setCreateClientId('')
-      setCreateLabel('')
-      setCreateMessage(`Created client ${data.record?.client_id ?? normalizedClientId}`)
-      await refreshAuditLog()
-    } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create client')
-    } finally {
-      setCreatingClient(false)
-    }
-  }
 
   async function deleteClient(clientIdToDelete: string) {
     const normalizedClientId = clientIdToDelete.trim()
@@ -218,6 +209,7 @@ export default function QuotaUI() {
       }
 
       setDeleteMessage(`Deleted client ${normalizedClientId}`)
+      await refreshClientReport()
       await refreshAuditLog()
       await refreshRateLimitStats()
     } catch (err: unknown) {
@@ -231,6 +223,47 @@ export default function QuotaUI() {
     () => (Array.isArray(rateLimit?.top_clients) ? rateLimit.top_clients : []).map((entry) => entry.client_id),
     [rateLimit],
   )
+
+  const clientReportRows = useMemo(() => {
+    const byClient = new Map<string, ClientReportRow>()
+    for (const key of clientKeys) {
+      const id = key.client_id
+      const current = byClient.get(id) ?? {
+        client_id: id,
+        total_keys: 0,
+        active_keys: 0,
+        revoked_keys: 0,
+        labels: [],
+        latest_created_at: null,
+        latest_used_at: null,
+      }
+      current.total_keys += 1
+      if (key.revoked_at) current.revoked_keys += 1
+      else current.active_keys += 1
+      if (key.label && !current.labels.includes(key.label)) current.labels.push(key.label)
+      if (!current.latest_created_at || (key.created_at && key.created_at > current.latest_created_at)) {
+        current.latest_created_at = key.created_at
+      }
+      if (!current.latest_used_at || (key.last_used_at && key.last_used_at > current.latest_used_at)) {
+        current.latest_used_at = key.last_used_at
+      }
+      byClient.set(id, current)
+    }
+    return Array.from(byClient.values()).sort((a, b) => {
+      const ta = a.latest_created_at ? new Date(a.latest_created_at).getTime() : 0
+      const tb = b.latest_created_at ? new Date(b.latest_created_at).getTime() : 0
+      return tb - ta
+    })
+  }, [clientKeys])
+
+  const filteredClientReportRows = useMemo(() => {
+    if (!clientReportSearch.trim()) return clientReportRows
+    const q = clientReportSearch.trim().toLowerCase()
+    return clientReportRows.filter((row) => {
+      const labelText = row.labels.join(' ').toLowerCase()
+      return row.client_id.toLowerCase().includes(q) || labelText.includes(q)
+    })
+  }, [clientReportRows, clientReportSearch])
 
   async function lookupConfig(targetClientId: string) {
     if (!targetClientId.trim()) return
@@ -370,9 +403,9 @@ export default function QuotaUI() {
 
       {/* ── Header ── */}
       <div className="shrink-0 px-8 pt-6 pb-4 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white">Client Management</h1>
+        <h1 className="text-2xl font-bold text-white">Client Report & Limits</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Register new client IDs separately from lookup, quota, and RPM management. This page is keyed by client_id.
+          Browse client IDs, inspect their keys, and manage quota or RPM overrides. Service keys are managed separately.
         </p>
       </div>
 
@@ -384,61 +417,143 @@ export default function QuotaUI() {
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
 
-        {/* Register Client tab */}
-        {activeTab === 'create' && (
+        {/* Client Report tab */}
+        {activeTab === 'report' && (
           <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Register Client</h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Register a new client_id and issue its first DB-backed service key. Use Lookup Client after creation
-                to manage quota and RPM separately.
-              </p>
-            </div>
-
-            {createError && <p className="mb-3 text-sm text-red-400">{createError}</p>}
-            {createMessage && <p className="mb-3 text-sm text-green-400">{createMessage}</p>}
-
-            {createdClientKey && (
-              <div className="mb-4 rounded-xl border border-yellow-700 bg-yellow-900/20 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-yellow-300">Copy This Key Now</p>
-                <p className="mt-2 break-all font-mono text-sm text-white">{createdClientKey}</p>
-                <p className="mt-2 text-xs text-yellow-200/80">
-                  This plaintext key is shown only once. Store it securely.
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Client Report</h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  View every client_id known to the system. Use the actions on each row to inspect, manage, or delete.
                 </p>
               </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Client ID
-                </label>
-                <input
-                  value={createClientId}
-                  onChange={(e) => setCreateClientId(e.target.value)}
-                  placeholder="e.g. api-key-01"
-                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Label
-                </label>
-                <input
-                  value={createLabel}
-                  onChange={(e) => setCreateLabel(e.target.value)}
-                  placeholder="Optional label"
-                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-purple-500"
-                />
-              </div>
               <button
-                onClick={() => void createClient()}
-                disabled={creatingClient}
-                className="rounded-xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void refreshClientReport()}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-xs font-medium text-gray-200 transition-colors hover:border-gray-500 hover:bg-gray-800"
               >
-                {creatingClient ? 'Registering…' : 'Register Client'}
+                Refresh
               </button>
             </div>
+
+            {clientReportError && <p className="mb-3 text-sm text-red-400">{clientReportError}</p>}
+
+            <div className="mb-4 grid gap-4 md:grid-cols-3">
+              <StatBlock
+                label="Registered Clients"
+                value={clientReportRows.length.toString()}
+                accent="text-white"
+                hint="unique client_id values found in api_keys"
+              />
+              <StatBlock
+                label="Active Keys"
+                value={clientReportRows.reduce((sum, row) => sum + row.active_keys, 0).toString()}
+                accent="text-green-400"
+                hint="keys not revoked yet"
+              />
+              <StatBlock
+                label="Revoked Keys"
+                value={clientReportRows.reduce((sum, row) => sum + row.revoked_keys, 0).toString()}
+                accent="text-red-400"
+                hint="revoked DB-backed keys"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Search Client ID / Label
+              </label>
+              <input
+                value={clientReportSearch}
+                onChange={(e) => setClientReportSearch(e.target.value)}
+                placeholder="Search client_id, label, or notes"
+                className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-purple-500"
+              />
+            </div>
+
+            {clientReportLoading ? (
+              <div className="space-y-2">
+                {[...Array(4)].map((_, index) => (
+                  <div key={index} className="h-16 animate-pulse rounded-xl bg-gray-800/50" />
+                ))}
+              </div>
+            ) : filteredClientReportRows.length === 0 ? (
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-6 text-sm text-gray-400">
+                No client records match this search.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-gray-800">
+                <div className="grid grid-cols-[2fr_0.7fr_1.1fr_1.1fr_0.8fr_1.5fr] gap-4 border-b border-gray-800 bg-gray-950/80 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <span>Client ID</span>
+                  <span>Keys</span>
+                  <span>Status</span>
+                  <span>Last Used</span>
+                  <span>Labels</span>
+                  <span>Actions</span>
+                </div>
+                <div className="divide-y divide-gray-800">
+                  {filteredClientReportRows.map((row) => {
+                    const status = row.active_keys > 0 ? 'active' : 'revoked'
+                    return (
+                      <div
+                        key={row.client_id}
+                        className="grid grid-cols-[2fr_0.7fr_1.1fr_1.1fr_0.8fr_1.5fr] gap-4 px-4 py-3 text-sm items-center"
+                      >
+                        <div className="min-w-0">
+                          <p className="break-all font-mono text-white">{row.client_id}</p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Created {row.latest_created_at ? new Date(row.latest_created_at).toLocaleString() : '—'}
+                          </p>
+                        </div>
+                        <span className="text-yellow-300">{row.total_keys}</span>
+                        <span className={`uppercase tracking-wider ${status === 'active' ? 'text-green-300' : 'text-red-300'}`}>
+                          {status}
+                        </span>
+                        <span className="text-gray-300">
+                          {row.latest_used_at ? new Date(row.latest_used_at).toLocaleString() : '—'}
+                        </span>
+                        <div className="min-w-0 text-xs text-gray-400">
+                          {row.labels.length > 0 ? row.labels.join(', ') : '—'}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => {
+                              setClientId(row.client_id)
+                              void lookupConfig(row.client_id)
+                              setActiveTab('lookup')
+                            }}
+                            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-gray-500 hover:bg-gray-800"
+                          >
+                            Lookup
+                          </button>
+                          <button
+                            onClick={() => {
+                              setClientId(row.client_id)
+                              void lookupConfig(row.client_id)
+                              setActiveTab('manage')
+                            }}
+                            className="rounded-lg border border-purple-700/60 px-3 py-1.5 text-xs font-medium text-purple-200 transition-colors hover:bg-purple-900/30"
+                          >
+                            Manage
+                          </button>
+                          <button
+                            onClick={() => {
+                              const ok = window.confirm(
+                                `Delete client ${row.client_id}? This revokes all keys and clears quota/rate-limit overrides.`,
+                              )
+                              if (ok) void deleteClient(row.client_id)
+                            }}
+                            disabled={deletingClient}
+                            className="rounded-lg border border-red-700/60 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-900/30 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

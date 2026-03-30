@@ -99,10 +99,10 @@ export default function ApiKeysUI() {
     <div className="max-w-6xl space-y-6 p-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Service API Keys</h1>
+          <h1 className="text-2xl font-bold text-white">Service Key Registry</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Issue DB-backed keys for service callers. These keys are used when the service env keys are empty,
-            or when <code>SERVICE_REQUIRE_DB_API_KEYS=true</code>.
+            Create and revoke DB-backed service keys for client_id. This page is the source of truth for key
+            material, while quota and rate limits live in the Client Report & Limits page.
           </p>
         </div>
         <button
@@ -127,8 +127,8 @@ export default function ApiKeysUI() {
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-white">Create API Key</h2>
           <p className="mt-1 text-sm text-gray-400">
-            Bind the key to a <code>client_id</code> so quota, rate limits, and service-auth lookups bucket correctly.
-            This page is for service client IDs, not dashboard user IDs.
+            Bind the key to a <code>client_id</code>. The same client_id is used by Client Report & Limits for quota
+            and rate-limit lookups. This page is for service client IDs, not dashboard user IDs.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">

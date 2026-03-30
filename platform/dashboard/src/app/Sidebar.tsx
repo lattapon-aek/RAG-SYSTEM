@@ -227,7 +227,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/memory',
-        label: 'Memory',
+        label: 'Memory by user_id',
         minRole: 'operator',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,7 +237,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/quota',
-        label: 'Quota & Limits',
+        label: 'Client Report & Limits',
         minRole: 'operator',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +275,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/api-keys',
-        label: 'Service API Keys',
+        label: 'Service Keys',
         minRole: 'admin',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
