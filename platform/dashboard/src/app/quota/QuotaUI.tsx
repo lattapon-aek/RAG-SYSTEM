@@ -41,16 +41,18 @@ function StatBlock({
   value,
   accent,
   hint,
+  valueClassName,
 }: {
   label: string
   value: string
   accent: string
   hint?: string
+  valueClassName?: string
 }) {
   return (
     <div className="rounded-xl border border-gray-700/60 bg-gray-800/70 p-4">
       <p className="text-xs uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${accent}`}>{value}</p>
+      <p className={`mt-2 text-2xl font-bold ${accent} ${valueClassName ?? ''}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
     </div>
   )
@@ -67,6 +69,7 @@ function sourceLabel(source?: 'runtime' | 'persistent' | 'env' | null, hasOverri
 const QUOTA_TABS = [
   { id: 'create', label: 'Register Client' },
   { id: 'lookup', label: 'Lookup Client' },
+  { id: 'manage', label: 'Manage Limits' },
   { id: 'live', label: 'Live Rate Limits' },
   { id: 'audit', label: 'Config Changes' },
 ]
@@ -93,6 +96,9 @@ export default function QuotaUI() {
   const [editLimit, setEditLimit] = useState('')
   const [editRpmLimit, setEditRpmLimit] = useState('')
   const [actionMessage, setActionMessage] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleteMessage, setDeleteMessage] = useState('')
+  const [deletingClient, setDeletingClient] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   async function refreshRateLimitStats() {
@@ -167,6 +173,60 @@ export default function QuotaUI() {
     }
   }
 
+  async function deleteClient(clientIdToDelete: string) {
+    const normalizedClientId = clientIdToDelete.trim()
+    if (!normalizedClientId) return
+
+    setDeleteError('')
+    setDeleteMessage('')
+    setQuotaError('')
+    setActionMessage('')
+    setDeletingClient(true)
+
+    try {
+      const keysRes = await fetch('/api/api-keys')
+      const keysData = await keysRes.json().catch(() => [])
+      if (!keysRes.ok) throw new Error(keysData?.error || `HTTP ${keysRes.status}`)
+
+      const matchingKeys = Array.isArray(keysData)
+        ? keysData.filter((entry) => entry?.client_id === normalizedClientId && !entry?.revoked_at)
+        : []
+
+      for (const key of matchingKeys) {
+        const revokeRes = await fetch(`/api/api-keys/${encodeURIComponent(key.id)}`, { method: 'DELETE' })
+        const revokeData = await revokeRes.json().catch(() => ({}))
+        if (!revokeRes.ok) throw new Error(revokeData?.error || `Failed to revoke ${key.id}`)
+      }
+
+      const [quotaRes, rateRes] = await Promise.all([
+        fetch(`/api/quota/${encodeURIComponent(normalizedClientId)}`, { method: 'DELETE' }),
+        fetch(`/api/rate-limit/${encodeURIComponent(normalizedClientId)}`, { method: 'DELETE' }),
+      ])
+      const quotaData = await quotaRes.json().catch(() => ({}))
+      const rateData = await rateRes.json().catch(() => ({}))
+      if (!quotaRes.ok) throw new Error(quotaData?.error || `Quota HTTP ${quotaRes.status}`)
+      if (!rateRes.ok) throw new Error(rateData?.error || `Rate HTTP ${rateRes.status}`)
+
+      if (quota?.client_id === normalizedClientId) {
+        setQuota(null)
+        setRateConfig(null)
+        setEditLimit('')
+        setEditRpmLimit('')
+      }
+      if (clientId === normalizedClientId) {
+        setClientId('')
+      }
+
+      setDeleteMessage(`Deleted client ${normalizedClientId}`)
+      await refreshAuditLog()
+      await refreshRateLimitStats()
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete client')
+    } finally {
+      setDeletingClient(false)
+    }
+  }
+
   const suggestedClients = useMemo(
     () => (Array.isArray(rateLimit?.top_clients) ? rateLimit.top_clients : []).map((entry) => entry.client_id),
     [rateLimit],
@@ -192,6 +252,8 @@ export default function QuotaUI() {
       setEditLimit(String(quotaData.daily_limit ?? 0))
       setEditRpmLimit(String(rateData.rpm_limit ?? 0))
       setClientId(normalizedClientId)
+      setDeleteError('')
+      setDeleteMessage('')
     } catch (err: unknown) {
       setQuota(null)
       setRateConfig(null)
@@ -386,7 +448,7 @@ export default function QuotaUI() {
             <div className="mb-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Client Lookup</h2>
               <p className="mt-1 text-xs text-gray-500">
-                Inspect one existing client_id and manage both token quota and request-per-minute configuration.
+                Inspect one existing client_id. Use Manage Limits to edit quota and RPM, or Delete Client to remove it.
               </p>
             </div>
 
@@ -420,13 +482,18 @@ export default function QuotaUI() {
               </button>
             </div>
 
-            {quotaError && <p className="mt-3 text-sm text-red-400">{quotaError}</p>}
-            {actionMessage && <p className="mt-3 text-sm text-green-400">{actionMessage}</p>}
+            {deleteError && <p className="mt-3 text-sm text-red-400">{deleteError}</p>}
+            {deleteMessage && <p className="mt-3 text-sm text-green-400">{deleteMessage}</p>}
 
             {quota && rateConfig && (
-              <>
-                <div className="mt-5 grid gap-4 md:grid-cols-4">
-                  <StatBlock label="Client" value={quota.client_id} accent="text-white" />
+              <div className="mt-5 space-y-5">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatBlock
+                    label="Client ID"
+                    value={quota.client_id}
+                    accent="text-white"
+                    valueClassName="break-all whitespace-normal text-sm leading-snug font-mono"
+                  />
                   <StatBlock label="Used Today" value={(quota.tokens_used_today ?? 0).toLocaleString()} accent="text-blue-400" />
                   <StatBlock
                     label="Quota Limit"
@@ -442,6 +509,69 @@ export default function QuotaUI() {
                   />
                 </div>
 
+                <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-white">Client Actions</h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Delete this client_id by revoking its API keys and clearing quota/rate-limit overrides.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                    <button
+                      onClick={() => {
+                        if (!quota) return
+                        const ok = window.confirm(
+                          `Delete client ${quota.client_id}? This revokes all API keys and clears quota/rate-limit overrides.`,
+                        )
+                        if (ok) void deleteClient(quota.client_id)
+                      }}
+                      disabled={deletingClient}
+                      className="rounded-xl border border-red-700 bg-red-900/30 px-4 py-3 text-sm font-medium text-red-200 transition-colors hover:bg-red-800/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingClient ? 'Deleting…' : 'Delete Client'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Manage Limits tab */}
+        {activeTab === 'manage' && (
+          <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Manage Limits</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Edit quota and RPM overrides for a selected client_id. Use Lookup Client first to load a client.
+              </p>
+            </div>
+
+            {quotaError && <p className="mt-3 text-sm text-red-400">{quotaError}</p>}
+            {actionMessage && <p className="mt-3 text-sm text-green-400">{actionMessage}</p>}
+
+            {quota && rateConfig ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatBlock
+                    label="Client ID"
+                    value={quota.client_id}
+                    accent="text-white"
+                    valueClassName="break-all whitespace-normal text-sm leading-snug font-mono"
+                  />
+                  <StatBlock label="Used Today" value={(quota.tokens_used_today ?? 0).toLocaleString()} accent="text-blue-400" />
+                  <StatBlock
+                    label="Remaining Today"
+                    value={quota.remaining == null ? 'Unlimited' : quota.remaining.toLocaleString()}
+                    accent={quota.remaining !== null && quota.remaining <= 0 ? 'text-red-400' : 'text-green-400'}
+                  />
+                  <StatBlock
+                    label="Current Minute"
+                    value={(rateConfig.requests_this_minute ?? 0).toLocaleString()}
+                    accent="text-blue-400"
+                  />
+                </div>
+
                 <div className="mt-5 grid gap-5 lg:grid-cols-2">
                   <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4">
                     <div className="mb-3">
@@ -452,14 +582,14 @@ export default function QuotaUI() {
                     </div>
                     <div className="mb-4 grid gap-3 sm:grid-cols-2">
                       <StatBlock
-                        label="Remaining Today"
-                        value={quota.remaining == null ? 'Unlimited' : quota.remaining.toLocaleString()}
-                        accent={quota.remaining !== null && quota.remaining <= 0 ? 'text-red-400' : 'text-green-400'}
-                      />
-                      <StatBlock
                         label="Config Source"
                         value={sourceLabel(quota.override_source, quota.has_override)}
                         accent="text-gray-200"
+                      />
+                      <StatBlock
+                        label="Quota Limit"
+                        value={(quota.daily_limit ?? 0).toLocaleString()}
+                        accent="text-yellow-400"
                       />
                     </div>
                     <div className="flex flex-col gap-3 md:flex-row md:items-end">
@@ -501,11 +631,6 @@ export default function QuotaUI() {
                     </div>
                     <div className="mb-4 grid gap-3 sm:grid-cols-2">
                       <StatBlock
-                        label="Current Minute"
-                        value={(rateConfig.requests_this_minute ?? 0).toLocaleString()}
-                        accent="text-blue-400"
-                      />
-                      <StatBlock
                         label="Remaining"
                         value={
                           rateConfig.remaining_this_minute == null
@@ -517,6 +642,11 @@ export default function QuotaUI() {
                             ? 'text-red-400'
                             : 'text-green-400'
                         }
+                      />
+                      <StatBlock
+                        label="Config Source"
+                        value={sourceLabel(rateConfig.override_source, rateConfig.has_override)}
+                        accent="text-gray-200"
                       />
                     </div>
                     <div className="flex flex-col gap-3 md:flex-row md:items-end">
@@ -550,6 +680,10 @@ export default function QuotaUI() {
                   </div>
                 </div>
               </>
+            ) : (
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-6 text-sm text-gray-400">
+                Load a client in Lookup Client first to edit quota and RPM overrides.
+              </div>
             )}
           </div>
         )}
