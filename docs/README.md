@@ -28,6 +28,29 @@ User / operator
   -> Response back to the caller
 ```
 
+```mermaid
+flowchart LR
+    U[User / operator] --> D[Dashboard]
+    U --> M[MCP server]
+    D --> I1[Ingestion service]
+    D --> Q[RAG service]
+    M --> Q
+    I1 --> Q
+    I1 --> RQ[Redis queue]
+    RQ --> W[Ingestion worker]
+    Q --> P[Parser / chunker / embedding]
+    Q --> G[Graph service]
+    Q --> RR[Reranker service]
+    P --> C[ChromaDB]
+    P --> PG[PostgreSQL]
+    G --> N[Neo4j]
+    RR --> Q
+    C --> Q
+    PG --> Q
+    N --> Q
+    Q --> O[Answer / result]
+```
+
 Reading the flow from top to bottom helps connect the docs to the codebase:
 
 1. `Environment` shows what the system needs to start

@@ -98,6 +98,17 @@ If you are learning the system, the shortest path is:
 3. [Design](docs/design.md) - understand the architecture and boundaries
 4. [Task](docs/task.md) - inspect how the behavior is implemented in code
 
+## RAG Glossary
+
+- `retrieval` - finding the most relevant documents or chunks for a query
+- `chunking` - splitting source content into smaller pieces for indexing and search
+- `embedding` - converting text into vectors for semantic similarity search
+- `reranking` - reordering candidate passages after initial retrieval
+- `grounding` - keeping generated answers tied to source evidence
+- `citation` - reporting the source passages used in an answer
+- `memory` - storing reusable conversational or operational context
+- `graph extraction` - turning text into entities and relationships for graph queries
+
 ## How RAG Flows Through This Repo
 
 The practical learning path is to follow the data flow across services:
