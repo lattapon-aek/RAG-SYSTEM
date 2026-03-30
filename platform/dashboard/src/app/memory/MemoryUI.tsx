@@ -109,6 +109,7 @@ export default function MemoryUI() {
   const [saving, setSaving] = useState(false)
 
   const [actionMessage, setActionMessage] = useState('')
+  const [copyMessage, setCopyMessage] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -159,16 +160,21 @@ export default function MemoryUI() {
     return decodeURIComponent((fromParams || searchParams.get('profile') || searchParams.get('user') || '').trim())
   }, [params, searchParams])
 
+  const routeTab = useMemo(() => {
+    const value = searchParams.get('tab')
+    return value === 'browse' || value === 'add' || value === 'manage' ? value : ''
+  }, [searchParams])
+
   useEffect(() => {
     void loadReport()
     if (routeProfile) {
       setUserId(routeProfile)
       setAddUserId(routeProfile)
       void loadMemory(routeProfile, backend)
-      setTab('browse')
+      setTab(routeTab || 'browse')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeProfile])
+  }, [routeProfile, routeTab])
 
   const filteredUsers = useMemo(() => {
     const q = reportSearch.trim().toLowerCase()
@@ -177,6 +183,18 @@ export default function MemoryUI() {
   }, [users, reportSearch])
 
   const hasActiveProfile = !!routeProfile
+
+  async function copyProfileKey() {
+    if (!routeProfile) return
+    try {
+      await navigator.clipboard.writeText(routeProfile)
+      setCopyMessage('Profile key copied')
+      window.setTimeout(() => setCopyMessage(''), 1500)
+    } catch {
+      setCopyMessage('Copy failed')
+      window.setTimeout(() => setCopyMessage(''), 1500)
+    }
+  }
 
   const memoryTypes = useMemo(() => {
     const s = new Set<string>()
@@ -388,6 +406,12 @@ export default function MemoryUI() {
             </div>
           )}
 
+          {copyMessage && !actionMessage && (
+            <div className="rounded-xl border border-gray-700 bg-gray-900/70 p-3 text-sm text-gray-300">
+              {copyMessage}
+            </div>
+          )}
+
           {tab === 'report' && (
             <>
               <div className="grid gap-4 md:grid-cols-4">
@@ -442,6 +466,12 @@ export default function MemoryUI() {
                             >
                               Open
                             </Link>
+                            <Link
+                              href={`/memory/${encodeURIComponent(u.user_id)}?tab=add`}
+                              className="rounded-lg border border-blue-700/60 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/30"
+                            >
+                              Add Memory
+                            </Link>
                           </div>
                         </div>
                       ))}
@@ -450,6 +480,26 @@ export default function MemoryUI() {
                 )}
               </div>
             </>
+          )}
+
+          {hasActiveProfile && (
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Selected Profile</p>
+                  <h3 className="mt-1 break-all font-mono text-lg text-white">{routeProfile}</h3>
+                  <p className="mt-1 text-xs text-gray-500">Use this profile to browse or add memory entries.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => void copyProfileKey()} className={btnGhost}>
+                    Copy Profile Key
+                  </button>
+                  <Link href="/memory" className={btnGhost}>
+                    Back to Overview
+                  </Link>
+                </div>
+              </div>
+            </div>
           )}
 
           {hasActiveProfile && (
