@@ -4,37 +4,44 @@
 
 ไฟล์นี้เป็นเอกสารประกอบของ `.env.example` ไม่ใช่ตัวแทนของไฟล์นั้น
 
-## ค่าที่ต้องมีเพื่อให้ระบบบูตได้
+## ตารางค่าหลัก
 
-- `POSTGRES_PASSWORD`
-- `POSTGRES_URL`
-- `NEO4J_PASSWORD`
-- `NEXTAUTH_SECRET`
-- `ADMIN_JWT_SECRET`
+| ตัวแปร | ค่า default ใน repo | เมื่อไหร่ควรเปลี่ยน | ผลกระทบ |
+|---|---|---|---|
+| `POSTGRES_PASSWORD` | `change-me-in-production` | ก่อนใช้งานจริง | ป้องกัน PostgreSQL |
+| `POSTGRES_URL` | URL ของ PostgreSQL ใน Compose | เมื่อใช้ DB host อื่น | ชี้บริการ ingestion, RAG, intelligence ไปที่ Postgres |
+| `NEO4J_PASSWORD` | `change-me-in-production` | ก่อนใช้งานจริง | ป้องกัน Neo4j |
+| `NEXTAUTH_SECRET` | `change-me-in-production` | เมื่อเปิด auth ของ dashboard | ใช้เซ็น session ของ NextAuth |
+| `ADMIN_JWT_SECRET` | `change-me-in-production` | เมื่อเปิด auth ฝั่ง admin | ใช้เซ็น JWT ฝั่ง admin |
+| `REDIS_URL` | `redis://redis:6379` | เมื่อ Redis อยู่นอก Compose | ใช้กับ queue และ cache |
+| `CHROMA_URL` | `http://chromadb:8004` | เมื่อ ChromaDB อยู่นอก Compose | ใช้กับ vector store |
+| `NEO4J_URL` | `bolt://neo4j:7687` | เมื่อ Neo4j อยู่นอก Compose | ใช้กับ graph service |
+| `LLM_PROVIDER` | `ollama` | เมื่อเปลี่ยน provider | กำหนด default LLM routing |
+| `EMBEDDING_PROVIDER` | `ollama` | เมื่อ embeddings มาจาก provider อื่น | กำหนด embedding backend |
+| `RERANKER_BACKEND` | `noop` | เมื่อเปิด reranking จริง | มีผลต่อการ rerank passage |
+| `SECRET_BACKEND` | `env` | เมื่อย้าย secrets ไป Vault/AWS | กำหนดแหล่งเก็บ secrets |
+| `RAG_API_KEY` | ว่าง | เมื่ออยากบังคับใช้ API key | เปิด/ปิดการ auth แบบง่าย |
+| `CHUNKER_STRATEGY` | `fixed` | เมื่ออยากเปลี่ยน chunking | พฤติกรรมการ chunk เอกสาร |
+| `GRAPH_EXTRACTOR_BACKEND` | `llm` | เมื่ออยากใช้ Spacy เร็วขึ้น | คุณภาพ vs ความเร็วของ graph extraction |
+| `CHROMA_COLLECTION_PREFIX` | `rag_1024` | เมื่อแยกข้อมูลเป็นชุดต่าง ๆ | ชื่อ collection ของ vector store |
+| `ANALYSIS_INTERVAL_HOURS` | `24` | เมื่อปรับรอบ intelligence | ความถี่งาน scheduled analysis |
+| `GAP_PROCESSING_INTERVAL_HOURS` | `6` | เมื่อปรับรอบ gap processing | ความถี่งาน review gap |
+| `TRAEFIK_RATE_LIMIT_RPS` | `100` | เมื่อปรับการป้องกัน ingress | rate limit ของ reverse proxy |
 
-## ค่าที่แนะนำสำหรับรันครั้งแรก
+## ค่าเริ่มต้นขั้นต่ำ
 
-- `REDIS_URL=redis://redis:6379`
-- `CHROMA_URL=http://chromadb:8004`
-- `NEO4J_URL=bolt://neo4j:7687`
-- `LLM_PROVIDER=ollama`
-- `EMBEDDING_PROVIDER=ollama`
-- `RERANKER_BACKEND=noop`
-- `SECRET_BACKEND=env`
-- `RAG_API_KEY=` ถ้าต้องการให้ local request ทำงานโดยไม่บังคับใช้ API key
+ถ้าต้องการให้ระบบบูต local ได้ก่อน ให้เริ่มด้วย:
 
-## ค่าที่มักต้องปรับ
-
-- `CHUNKER_STRATEGY`
-- `GRAPH_EXTRACTOR_BACKEND`
-- `LLM_MODEL`
-- `UTILITY_LLM_MODEL`
-- `GENERATION_LLM_MODEL`
-- `EMBEDDING_MODEL`
-- `CHROMA_COLLECTION_PREFIX`
-- `ANALYSIS_INTERVAL_HOURS`
-- `GAP_PROCESSING_INTERVAL_HOURS`
-- `TRAEFIK_RATE_LIMIT_RPS`
+```env
+POSTGRES_PASSWORD=change-me-in-production
+POSTGRES_URL=postgresql://postgres:change-me-in-production@postgres:5432/ragdb
+NEO4J_PASSWORD=change-me-in-production
+NEXTAUTH_SECRET=change-me-in-production
+ADMIN_JWT_SECRET=change-me-in-production
+RERANKER_BACKEND=noop
+SECRET_BACKEND=env
+RAG_API_KEY=
+```
 
 ## หมายเหตุ
 
