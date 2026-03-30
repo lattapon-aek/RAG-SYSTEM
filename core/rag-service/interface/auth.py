@@ -1,11 +1,11 @@
 """
 API key middleware.
 
-- If RAG_API_KEY is set, requests must send that exact key via X-API-Key.
+- If RAG_SERVICE_API_KEY is set, requests must send that exact key via X-API-Key.
 - If X-API-Key is provided and matches a DB-backed key in api_keys, the request is
   allowed and request.state.api_client_id is populated.
-- If RAG_REQUIRE_DB_API_KEYS=true, requests without a valid DB key are rejected when
-  no global env key is configured.
+- If SERVICE_REQUIRE_DB_API_KEYS=true, requests without a valid DB key are rejected
+  when no global env key is configured.
 """
 import hashlib
 import logging
@@ -73,7 +73,7 @@ async def _lookup_db_api_key(provided_key: str) -> Optional[str]:
 
 
 async def _db_keys_required() -> bool:
-    if not _is_true(os.getenv("RAG_REQUIRE_DB_API_KEYS", "false")):
+    if not _is_true(os.getenv("SERVICE_REQUIRE_DB_API_KEYS", os.getenv("RAG_REQUIRE_DB_API_KEYS", "false"))):
         return False
     pool = await _get_pg_pool()
     if not pool:
@@ -92,7 +92,7 @@ async def api_key_middleware(request: Request, call_next):
     if request.url.path in _EXCLUDED:
         return await call_next(request)
 
-    env_api_key = os.getenv("RAG_API_KEY", "")
+    env_api_key = os.getenv("RAG_SERVICE_API_KEY", os.getenv("RAG_API_KEY", ""))
     provided = request.headers.get("X-API-Key", "").strip()
 
     if env_api_key:

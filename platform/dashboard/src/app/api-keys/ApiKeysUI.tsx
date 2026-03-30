@@ -99,9 +99,10 @@ export default function ApiKeysUI() {
     <div className="max-w-6xl space-y-6 p-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">API Keys</h1>
+          <h1 className="text-2xl font-bold text-white">Service API Keys</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Issue per-client API keys for external callers and revoke them without touching env vars.
+            Issue DB-backed keys for service callers. These keys are used when the service env keys are empty,
+            or when <code>SERVICE_REQUIRE_DB_API_KEYS=true</code>.
           </p>
         </div>
         <button
@@ -125,7 +126,9 @@ export default function ApiKeysUI() {
       <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-white">Create API Key</h2>
-          <p className="mt-1 text-sm text-gray-400">Bind the key to a client_id so quota and rate limits bucket correctly.</p>
+          <p className="mt-1 text-sm text-gray-400">
+            Bind the key to a <code>client_id</code> so quota, rate limits, and service-auth lookups bucket correctly.
+          </p>
         </div>
         <div className="grid gap-4 md:grid-cols-[1.2fr_1fr_auto]">
           <input

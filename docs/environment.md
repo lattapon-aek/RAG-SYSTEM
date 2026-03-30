@@ -12,7 +12,6 @@ It is a companion to `.env.example`, not a replacement for it.
 | `POSTGRES_URL` | Compose-based PostgreSQL URL | When using a different DB host | Points ingestion, RAG, and intelligence services to Postgres |
 | `NEO4J_PASSWORD` | `change-me-in-production` | Before real deployment | Protects Neo4j access |
 | `NEXTAUTH_SECRET` | `change-me-in-production` | When enabling dashboard auth | Signs NextAuth sessions |
-| `ADMIN_JWT_SECRET` | `change-me-in-production` | When enabling admin auth | Signs admin JWTs |
 | `REDIS_URL` | `redis://redis:6379` | When Redis is external or clustered | Queue and cache connectivity |
 | `CHROMA_URL` | `http://chromadb:8004` | When ChromaDB is external | Vector store connectivity |
 | `NEO4J_URL` | `bolt://neo4j:7687` | When Neo4j is external | Graph service connectivity |
@@ -20,7 +19,9 @@ It is a companion to `.env.example`, not a replacement for it.
 | `EMBEDDING_PROVIDER` | `ollama` | When embeddings come from another provider | Embedding backend routing |
 | `RERANKER_BACKEND` | `noop` | When you want active reranking | Passage reranking behavior |
 | `SECRET_BACKEND` | `env` | When you move secrets to Vault/AWS | Secret source selection |
-| `RAG_API_KEY` | empty | When you want API key enforcement | Enables simple service auth |
+| `RAG_SERVICE_API_KEY` | empty | When you want API key enforcement on the RAG service | Enables inbound service auth for RAG |
+| `INGESTION_SERVICE_API_KEY` | empty | When you want API key enforcement on ingestion | Enables inbound service auth for ingestion |
+| `SERVICE_REQUIRE_DB_API_KEYS` | `false` | When you want DB-backed API keys to be mandatory | Rejects requests without a valid DB key |
 | `CHUNKER_STRATEGY` | `fixed` | When you want sentence/hierarchical/semantic chunking | Ingestion chunking behavior |
 | `GRAPH_EXTRACTOR_BACKEND` | `llm` | When you want faster Spacy extraction | Graph entity extraction quality vs speed |
 | `CHROMA_COLLECTION_PREFIX` | `rag_1024` | When separating embeddings by dataset | Vector collection names |
@@ -37,10 +38,10 @@ POSTGRES_PASSWORD=change-me-in-production
 POSTGRES_URL=postgresql://postgres:change-me-in-production@postgres:5432/ragdb
 NEO4J_PASSWORD=change-me-in-production
 NEXTAUTH_SECRET=change-me-in-production
-ADMIN_JWT_SECRET=change-me-in-production
 RERANKER_BACKEND=noop
 SECRET_BACKEND=env
-RAG_API_KEY=
+RAG_SERVICE_API_KEY=
+INGESTION_SERVICE_API_KEY=
 ```
 
 ## Notes
@@ -48,6 +49,7 @@ RAG_API_KEY=
 - Most service URLs default to Docker Compose service names.
 - Cloud provider keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `TYPHOON_API_KEY` are optional unless you route traffic to those providers.
 - The repo ships with extensive inline comments in `.env.example`; use that file as the source of truth for the full set of knobs.
+- Docker Compose maps `RAG_SERVICE_API_KEY` and `INGESTION_SERVICE_API_KEY` into the MCP server as `MCP_RAG_SERVICE_API_KEY` and `MCP_INGESTION_SERVICE_API_KEY`.
 
 ## Related docs
 

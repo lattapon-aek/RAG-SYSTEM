@@ -50,10 +50,10 @@ POSTGRES_PASSWORD=change-me-in-production
 POSTGRES_URL=postgresql://postgres:change-me-in-production@postgres:5432/ragdb
 NEO4J_PASSWORD=change-me-in-production
 NEXTAUTH_SECRET=change-me-in-production
-ADMIN_JWT_SECRET=change-me-in-production
 RERANKER_BACKEND=noop
 SECRET_BACKEND=env
-RAG_API_KEY=
+RAG_SERVICE_API_KEY=
+INGESTION_SERVICE_API_KEY=
 ```
 
 Post-start health checks:

@@ -9,13 +9,13 @@ function buildHeaders(extra?: HeaderMap, apiKey?: string): Headers {
 }
 
 export function ragHeaders(extra?: HeaderMap): Headers {
-  return buildHeaders(extra, process.env.RAG_SERVICE_API_KEY)
+  return buildHeaders(extra, process.env.MCP_RAG_SERVICE_API_KEY)
 }
 
 export function ingestionHeaders(extra?: HeaderMap): Headers {
-  return buildHeaders(extra, process.env.INGESTION_SERVICE_API_KEY ?? process.env.RAG_SERVICE_API_KEY)
+  return buildHeaders(extra, process.env.MCP_INGESTION_SERVICE_API_KEY ?? process.env.MCP_RAG_SERVICE_API_KEY)
 }
 
 export function knowledgeHeaders(extra?: HeaderMap): Headers {
-  return buildHeaders(extra, process.env.KNOWLEDGE_CONNECTOR_API_KEY)
+  return buildHeaders(extra)
 }

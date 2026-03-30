@@ -275,7 +275,7 @@ const NAV_GROUPS: RoleAwareNavGroup[] = [
       },
       {
         href: '/api-keys',
-        label: 'API Keys',
+        label: 'Service API Keys',
         minRole: 'admin',
         icon: (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
