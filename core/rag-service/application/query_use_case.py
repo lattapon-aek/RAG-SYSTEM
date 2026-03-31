@@ -50,6 +50,18 @@ _ANSWER_SYSTEM_PROMPT = (
     "Do not restate the question, add filler, or wander into background unless it is required to answer correctly. "
     "If the context contains multiple relevant facts, organize them with short bullets or a compact list. "
     "If the context is ambiguous, say what is missing or ambiguous instead of guessing. "
+    "Always output in this exact structure:\n"
+    "Answer: <one direct answer>\n"
+    "Facts:\n"
+    "- <fact 1>\n"
+    "- <fact 2>\n"
+    "Evidence:\n"
+    "- <document_id> / <chunk_id>\n"
+    "Missing:\n"
+    "- <what is missing or 'none'>\n"
+    "Next:\n"
+    "- <recommended next action or 'use_as_final'>\n"
+    "Keep each line short. Do not add extra sections.\n"
     "If the context does not contain enough information, reply exactly: "
     "'I don't have enough information to answer this question.'"
 )
@@ -57,7 +69,7 @@ _ANSWER_SYSTEM_PROMPT = (
 _ANSWER_PROMPT = (
     "Context:\n{context}\n\n"
     "Question: {query}\n\n"
-    "Answer the question using only the context. Be direct, specific, and on-point."
+    "Answer the question using only the context. Fill the structure exactly."
 )
 
 
