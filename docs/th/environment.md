@@ -29,6 +29,8 @@
 | `GAP_PROCESSING_INTERVAL_HOURS` | `6` | เมื่อปรับรอบ gap processing | ความถี่งาน review gap |
 | `TRAEFIK_RATE_LIMIT_RPS` | `100` | เมื่อปรับการป้องกัน ingress | rate limit ของ reverse proxy |
 
+ChromaDB ตอนนี้ใช้ resource profile เฉพาะใน `docker-compose.yml` เพราะมันอยู่บน retrieval hot path. โปรไฟล์ปัจจุบันคือ `0.25 CPU / 512 MB RAM / 80 pids`; ถ้ายังรู้สึกช้า จุดแรกที่ควรเพิ่มคือส่วนนี้.
+
 ## ค่าเริ่มต้นขั้นต่ำ
 
 ถ้าต้องการให้ระบบบูต local ได้ก่อน ให้เริ่มด้วย:

@@ -39,6 +39,11 @@ x-resource-heavy: &resource-heavy
   mem_limit: 640m
   pids_limit: 80
 
+x-resource-vector: &resource-vector
+  cpus: "0.25"
+  mem_limit: 512m
+  pids_limit: 80
+
 services:
 
   # ---------------------------------------------------------------------------
@@ -488,7 +493,7 @@ services:
 
   chromadb:
     image: chromadb/chroma:latest
-    <<: [*default-restart, *resource-light]
+    <<: [*default-restart, *resource-vector]
     ports:
       - "8004:8000"
     volumes:

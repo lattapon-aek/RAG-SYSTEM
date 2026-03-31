@@ -29,6 +29,8 @@ It is a companion to `.env.example`, not a replacement for it.
 | `GAP_PROCESSING_INTERVAL_HOURS` | `6` | When changing gap processing cadence | Scheduled gap review frequency |
 | `TRAEFIK_RATE_LIMIT_RPS` | `100` | When tuning ingress protection | Reverse proxy rate limiting |
 
+ChromaDB now runs with a dedicated vector profile in `docker-compose.yml` because it sits on the retrieval hot path. The current profile is `0.25 CPU / 512 MB RAM / 80 pids`; if vector search still feels slow, this is the first place to raise.
+
 ## Minimal local seed
 
 If you only want the stack to boot locally, start with:
