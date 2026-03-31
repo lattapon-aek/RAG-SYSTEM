@@ -123,7 +123,7 @@ pipeline ใช้ได้ทั้งแบบ streaming และ non-streami
 - `core/rag-service/application/retrieval/`
 - `core/rag-service/application/generation/`
 - `core/rag-service/infrastructure/`
-- `intelligence/intelligence-service/main.py`
+- `intelligence-service/main.py`
 
 ## สิ่งที่ควรจำ
 

@@ -20,7 +20,7 @@
 - `core/reranker-service` แยก backend สำหรับ reranking
 - `ingestion/ingestion-service` ดูแล ingestion, preview, job queue และ document versioning
 - `ingestion/knowledge-connector` ดูแลการเก็บความรู้จากแหล่งภายนอก
-- `intelligence/intelligence-service` ดูแลงาน intelligence แบบ scheduled
+- `intelligence-service` ดูแลงาน intelligence แบบ scheduled
 - `platform/dashboard` เป็นชั้น UI
 - `platform/mcp-server` เป็นชั้นเข้าถึง service ผ่าน MCP
 
@@ -40,7 +40,7 @@ stack นี้พึ่งพา:
 
 - `core/*`
 - `ingestion/*`
-- `intelligence/*`
+- `intelligence-service/*`
 - `platform/*`
 - `shared/*`
 - `docker-compose.yml`

@@ -18,7 +18,7 @@ The system follows a layered / hexagonal style:
 - `core/reranker-service` isolates reranking backends
 - `ingestion/ingestion-service` handles ingestion, preview, job queue, and document versioning
 - `ingestion/knowledge-connector` handles knowledge collection from external sources
-- `intelligence/intelligence-service` handles scheduled intelligence jobs
+- `intelligence-service` handles scheduled intelligence jobs
 - `platform/dashboard` provides the UI layer
 - `platform/mcp-server` provides service access through MCP
 
@@ -38,7 +38,7 @@ The stack depends on:
 
 - `core/*`
 - `ingestion/*`
-- `intelligence/*`
+- `intelligence-service/*`
 - `platform/*`
 - `shared/*`
 - `docker-compose.yml`

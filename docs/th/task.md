@@ -49,7 +49,7 @@
 - `ingestion/ingestion-service/*`
 - `core/rag-service/*`
 - `core/graph-service/*`
-- `intelligence/intelligence-service/*`
+- `intelligence-service/*`
 - `platform/dashboard/*`
 - `platform/mcp-server/*`
 - `tests/*`

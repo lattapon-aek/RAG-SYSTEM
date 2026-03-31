@@ -446,7 +446,7 @@ services:
   intelligence-service:
     build:
       context: .
-      dockerfile: intelligence/intelligence-service/Dockerfile
+      dockerfile: intelligence-service/Dockerfile
     <<: [*default-restart, *resource-medium]
     ports:
       - "8003:8003"

@@ -26,7 +26,7 @@ This document summarizes the system requirements that are reflected in the curre
 - `ingestion/ingestion-service/interface/routers.py`
 - `core/rag-service/interface/routers.py`
 - `core/graph-service/interface/routers.py`
-- `intelligence/intelligence-service/main.py`
+- `intelligence-service/main.py`
 - `platform/dashboard/src/app/*`
 - `platform/mcp-server/src/*`
 - `tests/*`

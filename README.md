@@ -164,7 +164,7 @@ Common entry points:
 - `ingestion/ingestion-service` handles file/text ingestion and preview
 - `core/rag-service` handles question answering and retrieval
 - `core/graph-service` handles graph extraction and graph queries
-- `intelligence/intelligence-service` handles scheduled analysis and review jobs
+- `intelligence-service` handles scheduled analysis and review jobs
 
 What to look for while reading:
 
@@ -179,7 +179,7 @@ For a service-level view of the same flow, open [the service map](docs/README.md
 
 - `core/` - query, graph, and reranking services
 - `ingestion/` - ingestion and knowledge connector services
-- `intelligence/` - intelligence and self-learning service
+- `intelligence-service/` - intelligence and self-learning service
 - `platform/` - dashboard and MCP server
 - `shared/` - shared runtime utilities
 - `scripts/` - migrations and operational helpers

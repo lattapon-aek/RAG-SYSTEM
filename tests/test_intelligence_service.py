@@ -3,7 +3,7 @@ Unit tests for Intelligence Service use cases.
 Tests run without DB — all repos are mocked.
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../intelligence/intelligence-service"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../intelligence-service"))
 
 import pytest
 import asyncio

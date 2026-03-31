@@ -47,7 +47,7 @@ If you want to trace the same tasks back to the higher-level docs, read:
 - `ingestion/ingestion-service/*`
 - `core/rag-service/*`
 - `core/graph-service/*`
-- `intelligence/intelligence-service/*`
+- `intelligence-service/*`
 - `platform/dashboard/*`
 - `platform/mcp-server/*`
 - `tests/*`

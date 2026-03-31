@@ -123,7 +123,7 @@ Both modes use the same upstream retrieval and context-building stages, so debug
 - `core/rag-service/application/retrieval/`
 - `core/rag-service/application/generation/`
 - `core/rag-service/infrastructure/`
-- `intelligence/intelligence-service/main.py`
+- `intelligence-service/main.py`
 
 ## Learning takeaway
 

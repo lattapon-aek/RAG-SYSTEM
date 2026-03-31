@@ -187,7 +187,7 @@ If you want a fast walkthrough, spend about 10 minutes in this order:
 6. `docs/task.md` to connect the docs back to source code
 7. `ingestion/ingestion-service/interface/routers.py` to see the ingestion API flow
 8. `core/rag-service/interface/routers.py` to see the query flow
-9. `core/graph-service/interface/routers.py` and `intelligence/intelligence-service/main.py` for the graph and background-job parts
+9. `core/graph-service/interface/routers.py` and `intelligence-service/main.py` for the graph and background-job parts
 10. `platform/dashboard/src/app/*` and `platform/mcp-server/src/*` to see how humans and tools interact with the system
 
 ## English docs
