@@ -32,6 +32,9 @@ type IngestPreviewResult = {
   graph_relations: PreviewRelation[]
   storage_plan: PreviewStorageAction[]
   warnings: string[]
+  validation_status?: string
+  validation_issues?: string[]
+  validation_summary?: string
   chunker_strategy: string
   chunk_mode: string
   chunk_fallback_reason: string
@@ -275,17 +278,37 @@ function renderIngestNodeBody(
     )
     const entityCount = preview?.graph_entities?.length ?? 0
     const relCount = preview?.graph_relations?.length ?? 0
+    const membershipCount = (preview?.graph_relations ?? []).filter(r => ['MEMBER_OF', 'PART_OF'].includes(r.relation_type)).length
+    const validationStatus = preview?.validation_status ?? 'unknown'
+    const validationIssues = preview?.validation_issues ?? []
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
           <span className="text-3xl font-bold text-white">{entityCount}</span>
           <span className="text-gray-400 text-sm">entities</span>
+          <Pill color={validationStatus === 'pass' ? 'green' : validationStatus === 'needs_review' ? 'amber' : 'gray'}>
+            {validationStatus}
+          </Pill>
         </div>
         <StatGrid items={[
           { label: 'Relations', value: relCount },
+          { label: 'Membership', value: membershipCount },
           { label: 'Latency',   value: ms(stage?.latency_ms) },
           { label: 'Mode',      value: preview?.graph_extraction_mode ?? '—' },
         ]} />
+        {preview?.validation_summary && (
+          <div className="bg-gray-800 rounded-lg px-2.5 py-2">
+            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Validation</div>
+            <p className="text-[10px] text-gray-300">{preview.validation_summary}</p>
+            {validationIssues.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {validationIssues.map(issue => (
+                  <span key={issue} className="text-[9px] bg-amber-900/30 text-amber-300 px-1.5 py-0.5 rounded-full">{issue}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {entityCount === 0 && (
           <div className="rounded-lg bg-gray-800 border border-gray-700 px-2.5 py-2 text-[10px] text-gray-500">
             No entities found — document may not contain named entities or graph extraction may be set to a non-LLM mode.
@@ -750,6 +773,16 @@ export default function IngestPreviewUI() {
 
               {/* ── Status badges ── */}
               <div className="shrink-0 flex flex-col gap-2">
+                {preview.validation_status && (
+                  <div className={`rounded-xl px-3 py-1.5 flex items-center gap-2 border ${preview.validation_status === 'pass' ? 'bg-emerald-900/20 border-emerald-700/40' : preview.validation_status === 'needs_review' ? 'bg-amber-900/20 border-amber-700/40' : 'bg-gray-900 border-gray-700'}`}>
+                    <span className={`text-xs font-semibold ${preview.validation_status === 'pass' ? 'text-emerald-300' : preview.validation_status === 'needs_review' ? 'text-amber-300' : 'text-gray-400'}`}>
+                      Graph {preview.validation_status}
+                    </span>
+                    {preview.validation_summary && (
+                      <span className="text-[10px] text-gray-300 ml-auto">{preview.validation_summary}</span>
+                    )}
+                  </div>
+                )}
                 {preview.duplicate_detected && (
                   <div className="bg-red-900/25 border border-red-700/40 rounded-xl px-3 py-1.5 flex items-center gap-2">
                     <span className="text-red-300 text-xs font-semibold">⚠ Duplicate Detected</span>
@@ -780,6 +813,9 @@ export default function IngestPreviewUI() {
                   {preview.graph_entities.length > 0 && (
                     <span><span className="text-emerald-400 font-medium">{preview.graph_entities.length}</span> entities</span>
                   )}
+                  {preview.graph_relations.length > 0 && (
+                    <span><span className="text-amber-400 font-medium">{preview.graph_relations.length}</span> relations</span>
+                  )}
                 </div>
                 {preview.parsed_preview && (
                   <ExpandableText text={preview.parsed_preview} maxLen={320} />
@@ -793,6 +829,9 @@ export default function IngestPreviewUI() {
                   <span><span className="text-gray-300 font-medium">{preview.parsed_chars?.toLocaleString()}</span> parsed chars</span>
                   <span><span className="text-amber-400 font-medium">{preview.embedding_provider}</span> · {preview.embedding_model}</span>
                   <span><span className="text-blue-400 font-medium">{preview.chunker_strategy}</span> chunker</span>
+                  {preview.graph_extraction_mode && (
+                    <span><span className="text-emerald-400 font-medium">{preview.graph_extraction_mode}</span> graph mode</span>
+                  )}
                   {preview.chunk_fallback_reason && (
                     <span className="w-full text-amber-500 truncate">⚠ fallback: {preview.chunk_fallback_reason}</span>
                   )}
@@ -864,12 +903,25 @@ export default function IngestPreviewUI() {
                   <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
                     Graph Entities <span className="text-gray-700 normal-case font-normal">({preview.graph_entities.length})</span>
                   </h3>
+                  {preview.validation_issues?.length ? (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {preview.validation_issues.map(issue => (
+                        <span key={issue} className="text-[9px] bg-amber-900/25 border border-amber-700/30 text-amber-300 px-2 py-0.5 rounded-full">
+                          {issue}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     {preview.graph_entities.map((e) => (
                       <span key={e.id} className="text-[10px] bg-emerald-600/20 border border-emerald-700/30 text-emerald-300 px-2 py-0.5 rounded-full">
                         {e.name} <span className="text-emerald-700">({e.label})</span>
                       </span>
                     ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[9px] text-gray-500">
+                    <span><span className="text-gray-400 font-medium">{(preview.graph_relations ?? []).filter(r => ['MEMBER_OF', 'PART_OF'].includes(r.relation_type)).length}</span> membership edges</span>
+                    <span><span className="text-gray-400 font-medium">{preview.validation_status ?? 'unknown'}</span> validation</span>
                   </div>
                   {preview.graph_relations.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">

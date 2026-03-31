@@ -1,5 +1,6 @@
 import logging
 import asyncio
+from collections import defaultdict, deque
 from typing import List
 
 from neo4j import AsyncGraphDatabase, AsyncDriver
@@ -12,6 +13,17 @@ from domain.errors import GraphServiceUnavailableError
 logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2.0
+_RELATION_PRIORITY = {
+    "MEMBER_OF": 100,
+    "PART_OF": 95,
+    "HAS_ROLE": 80,
+    "REPORTS_TO": 75,
+    "WORKS_WITH": 60,
+    "RESPONSIBLE_FOR": 55,
+    "GOOD_FOR": 40,
+    "ALIAS_OF": 20,
+    "MENTIONS": 5,
+}
 
 
 class Neo4jGraphRepository(IGraphRepository):
@@ -181,6 +193,9 @@ class Neo4jGraphRepository(IGraphRepository):
                         source_doc_id=rel.get("source_doc_id", ""),
                     ))
 
+        entities = Neo4jGraphRepository._rank_entities(entities, relations, seed_ids=seen_ids)
+        relations = Neo4jGraphRepository._rank_relations(relations, seed_ids=seen_ids)
+
         context_text = _build_context_text(entities, relations)
         return GraphQueryResult(
             entities=entities, relations=relations, context_text=context_text
@@ -302,6 +317,9 @@ class Neo4jGraphRepository(IGraphRepository):
                         relation_type=rel["relation_type"],
                         source_doc_id=rel.get("source_doc_id", ""),
                     ))
+
+        entities = Neo4jGraphRepository._rank_entities(entities, relations, seed_ids=seed_ids)
+        relations = Neo4jGraphRepository._rank_relations(relations, seed_ids=seed_ids)
 
         context_text = _build_context_text(entities, relations)
         return GraphQueryResult(entities=entities, relations=relations, context_text=context_text)
@@ -447,6 +465,85 @@ class Neo4jGraphRepository(IGraphRepository):
                 return {"entity_count": 0, "relation_count": 0}
         except ServiceUnavailable as exc:
             raise GraphServiceUnavailableError(str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # Ranking helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _relation_priority(relation_type: str) -> int:
+        return _RELATION_PRIORITY.get((relation_type or "").upper(), 0)
+
+    @classmethod
+    def _rank_entities(
+        cls,
+        entities: List[Entity],
+        relations: List[Relation],
+        seed_ids: List[str],
+    ) -> List[Entity]:
+        if not entities:
+            return []
+
+        seed_set = {s for s in seed_ids if s}
+        adjacency: dict[str, set[str]] = defaultdict(set)
+        for rel in relations:
+            adjacency[rel.source_entity_id].add(rel.target_entity_id)
+            adjacency[rel.target_entity_id].add(rel.source_entity_id)
+
+        distances: dict[str, int] = {seed: 0 for seed in seed_set}
+        queue = deque(seed_set)
+        while queue:
+            current = queue.popleft()
+            for neighbor in adjacency.get(current, set()):
+                if neighbor not in distances:
+                    distances[neighbor] = distances[current] + 1
+                    queue.append(neighbor)
+
+        direct_bonus: dict[str, int] = defaultdict(int)
+        relation_bonus: dict[str, int] = defaultdict(int)
+        for rel in relations:
+            weight = cls._relation_priority(rel.relation_type)
+            if rel.source_entity_id in seed_set and rel.target_entity_id not in seed_set:
+                direct_bonus[rel.target_entity_id] = max(direct_bonus[rel.target_entity_id], weight)
+            if rel.target_entity_id in seed_set and rel.source_entity_id not in seed_set:
+                direct_bonus[rel.source_entity_id] = max(direct_bonus[rel.source_entity_id], weight)
+            relation_bonus[rel.source_entity_id] = max(relation_bonus[rel.source_entity_id], weight)
+            relation_bonus[rel.target_entity_id] = max(relation_bonus[rel.target_entity_id], weight)
+
+        def _score(entity: Entity) -> tuple:
+            is_seed = 1 if entity.id in seed_set else 0
+            hop = distances.get(entity.id, 99)
+            direct = direct_bonus.get(entity.id, 0)
+            relation = relation_bonus.get(entity.id, 0)
+            return (
+                -is_seed,
+                hop,
+                -direct,
+                -relation,
+                entity.name.lower(),
+                entity.id,
+            )
+
+        return sorted(entities, key=_score)
+
+    @classmethod
+    def _rank_relations(cls, relations: List[Relation], seed_ids: List[str]) -> List[Relation]:
+        if not relations:
+            return []
+        seed_set = {s for s in seed_ids if s}
+
+        def _score(rel: Relation) -> tuple:
+            touches_seed = rel.source_entity_id in seed_set or rel.target_entity_id in seed_set
+            return (
+                0 if touches_seed else 1,
+                -cls._relation_priority(rel.relation_type),
+                rel.source_entity_id,
+                rel.target_entity_id,
+                rel.relation_type,
+                rel.id,
+            )
+
+        return sorted(relations, key=_score)
 
 
 # ------------------------------------------------------------------

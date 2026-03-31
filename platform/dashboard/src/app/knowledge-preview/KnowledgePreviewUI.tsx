@@ -47,6 +47,7 @@ interface RetrieveResult {
   query: string
   chunks: RetrieveChunk[]
   graph_entities: Array<{ name: string; type: string }>
+  graph_seed_names?: string[]
   retrieval_latency_ms: number
   total_chunks_before_rerank: number
   // pipeline stage metadata
@@ -69,6 +70,7 @@ interface FullQueryResult {
   answer: string
   citations: RetrieveChunk[]
   graph_entities: Array<{ name: string; type: string }>
+  graph_seed_names?: string[]
   rewritten_query?: string
   hyde_used?: boolean
   from_cache?: boolean
@@ -103,6 +105,7 @@ interface PipelineExtras {
   hydeUsed?: boolean
   topK?: number
   topN?: number
+  graphSeedNames?: string[]
 }
 
 interface PipelineData {
@@ -169,6 +172,27 @@ function buildPipelineData(
   if (activeNodes.has('vector') || activeNodes.has('rerank')) activeNodes.add('chunks')
   if (cacheHit) { activeNodes.add('query'); activeNodes.add('cache') }
   return { status: 'done', mode, activeNodes, nodeTimings, nodeMeta, cacheHit, cachedAnswer, extras }
+}
+
+function extractGraphSeedNames(query: string): string[] {
+  const cleaned = query.trim()
+  if (!cleaned) return []
+
+  const seeds: string[] = []
+  const teamMatch = cleaned.match(/(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})/i)
+  if (teamMatch) {
+    const teamTail = teamMatch[1].trim()
+    const teamName = teamTail
+      .replace(/\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$/i, '')
+      .replace(/^[\s,.;:，。]+|[\s,.;:，。]+$/g, '')
+    if (teamName) seeds.push(teamName)
+  }
+
+  for (const token of cleaned.match(/\b[A-Z]{2,}\b/g) ?? []) {
+    if (!seeds.includes(token)) seeds.push(token)
+  }
+
+  return Array.from(new Set(seeds))
 }
 
 interface GraphEntity {
@@ -489,6 +513,7 @@ function renderNodeBody(
   if (nodeId === 'graph') {
     if (!isActive) return <p className="text-gray-500 text-[11px]">Graph disabled — enable <span className="text-emerald-400">Graph</span> toggle to use Neo4j augmentation.</p>
     const count = meta?.entity_count as number | undefined
+    const seedNames = (meta?.seed_names as string[] | undefined) ?? extras?.graphSeedNames ?? []
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
@@ -498,6 +523,17 @@ function renderNodeBody(
         {(count ?? 0) === 0 && (
           <div className="rounded-lg bg-gray-800 border border-gray-700 px-2.5 py-2 text-[10px] text-gray-500">
             No graph entities matched this query. Check that the namespace has graph data, or try a different query.
+          </div>
+        )}
+        {seedNames.length > 0 && (
+          <div className="bg-gray-800 rounded-lg px-2.5 py-2">
+            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Graph seeds</div>
+            <div className="flex flex-wrap gap-1">
+              {seedNames.slice(0, 4).map(seed => (
+                <span key={seed} className="text-[9px] bg-cyan-900/30 text-cyan-300 px-1.5 py-0.5 rounded-full">{seed}</span>
+              ))}
+              {seedNames.length > 4 && <span className="text-[9px] text-gray-600">+{seedNames.length - 4} more</span>}
+            </div>
           </div>
         )}
         <StatGrid items={[{ label: 'Latency', value: ms(timing) }, { label: 'Store', value: 'Neo4j' }]} />
@@ -647,6 +683,7 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
     if (meta?.hit !== undefined) parts.push(meta.hit ? '✓ CACHE HIT' : '✗ miss')
     if (meta?.result_count !== undefined) parts.push(`${meta.result_count} results`)
     if (meta?.entity_count !== undefined) parts.push(`${meta.entity_count} entities`)
+    if (meta?.seed_count !== undefined) parts.push(`${meta.seed_count} seeds`)
     if (meta?.top_score !== undefined) parts.push(`score: ${(meta.top_score as number).toFixed(3)}`)
     if (meta?.entry_count !== undefined) parts.push(`${meta.entry_count} entries`)
     if (meta?.rewritten) parts.push('rewritten ✓')
@@ -1399,6 +1436,7 @@ export default function KnowledgePreviewUI() {
   const [graphNs, setGraphNs] = useState('default')
   const [graphEntities, setGraphEntities] = useState<GraphEntity[]>([])
   const [graphRelations, setGraphRelations] = useState<GraphRelation[]>([])
+  const [graphSeeds, setGraphSeeds] = useState<string[]>([])
   const [graphLoading, setGraphLoading] = useState(false)
   const [graphError, setGraphError] = useState<string | null>(null)
 
@@ -1433,6 +1471,7 @@ export default function KnowledgePreviewUI() {
   const loadGraphMock = () => {
     setGraphEntities(MOCK_GRAPH_ENTITIES)
     setGraphRelations(MOCK_GRAPH_RELATIONS)
+    setGraphSeeds(['machine learning', 'neural networks'])
     setGraphError(null)
     setGraphQuery('machine learning neural networks')
   }
@@ -1475,6 +1514,7 @@ export default function KnowledgePreviewUI() {
         hydeUsed: data.hyde_used,
         topK: retrieveTopK,
         topN: retrieveTopN,
+        graphSeedNames: data.graph_seed_names ?? [],
       }))
     } catch {
       setRetrieveError('Failed to connect to RAG service')
@@ -1522,6 +1562,7 @@ export default function KnowledgePreviewUI() {
         hydeUsed: data.hyde_used,
         topK: retrieveTopK,
         topN: retrieveTopN,
+        graphSeedNames: data.graph_seed_names ?? [],
       }))
     } catch {
       setRetrieveError('Failed to connect to RAG service')
@@ -1566,11 +1607,15 @@ export default function KnowledgePreviewUI() {
     if (!graphQuery.trim()) return
     setGraphLoading(true)
     setGraphError(null)
+    setGraphSeeds([])
+    setGraphEntities([])
+    setGraphRelations([])
     try {
+      const seedNames = extractGraphSeedNames(graphQuery)
       const res = await fetch('/api/graph/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_text: graphQuery, namespace: graphNs, max_hops: 2 }),
+        body: JSON.stringify({ query_text: graphQuery, namespace: graphNs, max_hops: 2, entity_names: seedNames }),
       })
       const data = await res.json()
       if (!res.ok) { setGraphError(data.error || 'Error'); return }
@@ -1580,6 +1625,7 @@ export default function KnowledgePreviewUI() {
       const idToName: Record<string, string> = {}
       rawEntities.forEach(e => { idToName[e.id] = e.name })
       setGraphEntities(rawEntities.map(e => ({ name: e.name, type: e.label ?? e.type ?? 'CONCEPT', id: e.id })))
+      setGraphSeeds(data.seed_names ?? seedNames)
       setGraphRelations(rawRelations.map(r => ({
         source: idToName[r.source_entity_id ?? ''] ?? r.source ?? r.source_entity_id ?? '',
         target: idToName[r.target_entity_id ?? ''] ?? r.target ?? r.target_entity_id ?? '',
@@ -1874,11 +1920,13 @@ export default function KnowledgePreviewUI() {
                   {(() => {
                     const hasTimings = !!(fullQueryResult && !fullQueryResult.from_cache)
                     const graphEntities = retrieveResult?.graph_entities ?? fullQueryResult?.graph_entities ?? []
+                    const graphSeedNames = retrieveResult?.graph_seed_names ?? fullQueryResult?.graph_seed_names ?? []
                     const hasGraphEntities = graphEntities.length > 0
+                    const hasGraphSeeds = graphSeedNames.length > 0
                     const hasMemory = (retrieveResult?.memory_context_chars ?? 0) > 0 || (fullQueryResult?.memory_context_chars ?? 0) > 0
                     const hasRewrite = !!(retrieveResult?.rewritten_query || fullQueryResult?.rewritten_query)
                     const hasHyde = !!(retrieveResult?.hyde_used || fullQueryResult?.hyde_used)
-                    if (!hasTimings && !hasGraphEntities && !hasMemory && !hasRewrite && !hasHyde) return null
+                    if (!hasTimings && !hasGraphEntities && !hasGraphSeeds && !hasMemory && !hasRewrite && !hasHyde) return null
                     return (
                       <div className="shrink-0 bg-gray-900 border border-gray-800 rounded-xl p-3">
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
@@ -1891,8 +1939,14 @@ export default function KnowledgePreviewUI() {
                           {hasGraphEntities && (
                             <span><span className="text-emerald-400 font-medium">{graphEntities.length}</span> graph entities</span>
                           )}
+                          {hasGraphSeeds && (
+                            <span><span className="text-cyan-400 font-medium">{graphSeedNames.length}</span> graph seeds</span>
+                          )}
                           {hasMemory && (
                             <span><span className="text-cyan-400 font-medium">{(retrieveResult?.memory_context_chars ?? fullQueryResult?.memory_context_chars ?? 0).toLocaleString()}</span> memory chars</span>
+                          )}
+                          {hasGraphSeeds && (
+                            <span className="w-full text-cyan-500 truncate">seeded by: {graphSeedNames.slice(0, 4).join(', ')}{graphSeedNames.length > 4 ? ` … +${graphSeedNames.length - 4}` : ''}</span>
                           )}
                           {hasRewrite && (
                             <span className="w-full text-cyan-500 truncate">↺ {retrieveResult?.rewritten_query ?? fullQueryResult?.rewritten_query}</span>
@@ -2194,6 +2248,19 @@ export default function KnowledgePreviewUI() {
             </div>
 
             {graphError && <p className="text-xs text-red-400 shrink-0">{graphError}</p>}
+
+            {graphSeeds.length > 0 && (
+              <div className="shrink-0 bg-gray-900 border border-gray-800 rounded-xl p-3">
+                <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Graph Seeds</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {graphSeeds.map(seed => (
+                    <span key={seed} className="text-[10px] bg-cyan-600/20 border border-cyan-700/30 text-cyan-300 px-2 py-0.5 rounded-full">
+                      {seed}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Legend */}
             {graphEntities.length > 0 && (

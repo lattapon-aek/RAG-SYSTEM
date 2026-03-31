@@ -164,12 +164,17 @@ class QueryUseCase:
         namespace: str,
         top_k: int,
         use_graph: bool,
+        graph_entity_names: Optional[List[str]] = None,
     ):
         """Vector + graph retrieval for a single namespace."""
         vector_task = self._vector_store.search(
             retrieval_embedding, top_k=top_k, namespace=namespace
         )
-        graph_entity_names = self._extract_graph_seed_names(retrieval_query)
+        graph_entity_names = (
+            graph_entity_names
+            if graph_entity_names is not None
+            else self._extract_graph_seed_names(retrieval_query)
+        )
         graph_task = (
             self._graph.query_related_entities(
                 retrieval_query,
@@ -318,10 +323,11 @@ class QueryUseCase:
 
         # Parallel retrieval (all namespaces in parallel)
         retrieval_embedding = await self._embed.embed(embed_query)
+        graph_seed_names = self._extract_graph_seed_names(retrieval_query)
         ns_tasks = [
             self._retrieve_one_namespace(
                 retrieval_embedding, retrieval_query, ns,
-                request.top_k, request.use_graph
+                request.top_k, request.use_graph, graph_seed_names
             )
             for ns in request.effective_namespaces
         ]
@@ -619,11 +625,12 @@ class QueryUseCase:
 
         # 5. Parallel retrieval: vector + graph (all namespaces in parallel)
         retrieval_embedding = await self._embed.embed(embed_query)
+        graph_seed_names = self._extract_graph_seed_names(retrieval_query)
 
         t_vec = time.monotonic()
         ns_tasks = [
             self._retrieve_one_namespace(
-                retrieval_embedding, retrieval_query, ns, req.top_k, req.use_graph
+                retrieval_embedding, retrieval_query, ns, req.top_k, req.use_graph, graph_seed_names
             )
             for ns in req.effective_namespaces
         ]
@@ -674,7 +681,10 @@ class QueryUseCase:
             ))
 
         if req.use_graph and self._graph:
-            _s("graph", True, 0.0, entity_count=len(graph_entity_texts))
+            _s("graph", True, 0.0,
+               entity_count=len(graph_entity_texts),
+               seed_names=graph_seed_names,
+               seed_count=len(graph_seed_names))
 
         # 6. RRF merge (vector + graph)
         all_lists = [r for r in [vector_results, graph_results] if r]
@@ -847,6 +857,7 @@ class QueryUseCase:
             memory_context_chars=memory_context_chars,
             knowledge_gap=knowledge_gap,
             top_rerank_score=round(top_score, 4),
+            graph_seed_names=graph_seed_names,
         )
 
         # 12. Cache result (only when KB has relevant answers)

@@ -53,6 +53,7 @@ class QueryResult:
     answer: str
     citations: List[Citation]
     graph_entities: List[Dict[str, Any]] = field(default_factory=list)
+    graph_seed_names: List[str] = field(default_factory=list)
     rewritten_query: Optional[str] = None
     hyde_used: bool = False
     sub_queries: List[str] = field(default_factory=list)

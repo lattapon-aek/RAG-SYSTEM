@@ -52,6 +52,7 @@ class QueryResponse(BaseModel):
     answer: str
     citations: List[CitationResponse]
     graph_entities: List[Dict[str, Any]] = []
+    graph_seed_names: List[str] = []
     rewritten_query: Optional[str] = None
     hyde_used: bool = False
     sub_queries: List[str] = []
@@ -198,6 +199,7 @@ class RetrieveResponse(BaseModel):
     query: str
     chunks: List[RetrieveChunk]
     graph_entities: List[Dict[str, Any]] = []
+    graph_seed_names: List[str] = []
     retrieval_latency_ms: float = 0.0
     total_chunks_before_rerank: int = 0
     # --- stage metadata (new) ---

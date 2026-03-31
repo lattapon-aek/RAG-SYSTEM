@@ -466,7 +466,62 @@ async def test_query_use_case_passes_namespace_to_cache_and_graph():
 
     cache_mock.get.assert_awaited_once_with([0.1] * 8, namespace="tenant-a")
     graph_mock.query_related_entities.assert_awaited_once_with(
-        "tenant scoped query", top_k=req.top_k, namespace="tenant-a"
+        "tenant scoped query", top_k=req.top_k, namespace="tenant-a", entity_names=[]
+    )
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_extracts_team_seed_names_for_graph():
+    """Team-style questions should seed graph augmentation with the team acronym."""
+    from application.query_use_case import QueryUseCase, QueryRequest as UCQueryRequest
+    from application.context_compressor import NoOpCompressor
+    from domain.entities import BuiltContext
+
+    cache_mock = AsyncMock()
+    cache_mock.get = AsyncMock(return_value=None)
+    cache_mock.set = AsyncMock()
+
+    graph_mock = AsyncMock()
+    graph_mock.query_related_entities = AsyncMock(return_value=[])
+
+    vs_mock = AsyncMock()
+    vs_mock.search = AsyncMock(return_value=[])
+
+    reranker = AsyncMock()
+    reranker.rerank = AsyncMock(return_value=[])
+
+    embed_mock = AsyncMock()
+    embed_mock.embed = AsyncMock(return_value=[0.1] * 8)
+
+    llm_mock = AsyncMock()
+    llm_mock.generate = AsyncMock(return_value="mocked answer")
+
+    class _NoOpContextBuilder:
+        async def build(self, query, chunks, max_tokens=4096):
+            return BuiltContext(chunks=[], total_tokens=0)
+
+    uc = QueryUseCase(
+        embedding_service=embed_mock,
+        vector_store=vs_mock,
+        llm_service=llm_mock,
+        document_repository=AsyncMock(),
+        reranker=reranker,
+        context_builder=_NoOpContextBuilder(),
+        context_compressor=NoOpCompressor(),
+        semantic_cache=cache_mock,
+    )
+    uc._graph = graph_mock
+
+    req = UCQueryRequest(
+        query="ทีม ABAP มีใครบ้าง",
+        namespace="tenant-a",
+        use_cache=False,
+        use_graph=True,
+    )
+    await uc.execute(req)
+
+    graph_mock.query_related_entities.assert_awaited_once_with(
+        "ทีม ABAP มีใครบ้าง", top_k=req.top_k, namespace="tenant-a", entity_names=["ABAP"]
     )
 
 

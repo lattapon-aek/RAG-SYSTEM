@@ -219,6 +219,7 @@ async def query(request: Request, req: QueryRequest, use_case=Depends(get_query_
             memory_context_chars=result.memory_context_chars,
             knowledge_gap=result.knowledge_gap,
             top_rerank_score=result.top_rerank_score,
+            graph_seed_names=result.graph_seed_names,
         )
     except EmptyQueryError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -287,6 +288,7 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
     t0 = _time.monotonic()
     stages: list = []
     retrieval_query = req.query
+    graph_seed_names = use_case._extract_graph_seed_names(retrieval_query)
 
     def _stage(name: str, fired: bool, ms: float, **meta) -> None:
         stages.append(StageTimingInfo(stage=name, fired=fired,
@@ -319,6 +321,7 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
                 stages=stages, cache_hit=True,
                 cached_answer=(getattr(cached, "answer", "") or "")[:500],
                 embed_latency_ms=round(embed_ms, 2),
+                graph_seed_names=graph_seed_names,
             )
         _stage("cache", True, cache_ms, hit=False)
 
@@ -403,7 +406,7 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
                     retrieval_query,
                     top_k=req.top_k,
                     namespace=ns,
-                    entity_names=use_case._extract_graph_seed_names(retrieval_query),
+                    entity_names=graph_seed_names,
                 )
                 for ns in effective_namespaces
             ]
@@ -420,7 +423,10 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
         except Exception:
             pass
         graph_ms = (_time.monotonic() - t) * 1000
-        _stage("graph", True, graph_ms, entity_count=len(graph_entities))
+        _stage("graph", True, graph_ms,
+               entity_count=len(graph_entities),
+               seed_names=graph_seed_names,
+               seed_count=len(graph_seed_names))
 
     # ── Stage: rerank (optional) ──────────────────────────────────────────────
     final_results = vector_results
@@ -474,6 +480,7 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
         query=req.query,
         chunks=chunks,
         graph_entities=graph_entities,
+        graph_seed_names=graph_seed_names,
         retrieval_latency_ms=total_ms,
         total_chunks_before_rerank=total_before,
         stages=stages,

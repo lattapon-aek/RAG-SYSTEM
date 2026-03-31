@@ -107,6 +107,10 @@ class TestSpacyEntityExtractor:
 class TestNeo4jGraphRepositoryMocked:
     """Test Neo4j repository behaviour using mocked Neo4j driver."""
 
+    @pytest.fixture(autouse=True)
+    def _skip_if_no_neo4j(self):
+        pytest.importorskip("neo4j", reason="neo4j not installed")
+
     def _make_mock_driver(self):
         """Returns a mock AsyncDriver with a mock session."""
         mock_tx = AsyncMock()
@@ -164,6 +168,65 @@ class TestNeo4jGraphRepositoryMocked:
 
             with pytest.raises(GraphServiceUnavailableError):
                 await repo.store_entities_and_relations([], [])
+
+    def test_rank_entities_prioritizes_membership_relations(self):
+        """Membership relations should float above weaker graph edges."""
+        from infrastructure.neo4j_graph_repository import Neo4jGraphRepository
+        from domain.entities import Entity, Relation
+
+        entities = [
+            Entity(id="team abap", label="ORG", name="ทีม ABAP", source_doc_ids=["doc-1"]),
+            Entity(id="ลัทธพล", label="PERSON", name="ลัทธพล", source_doc_ids=["doc-1"]),
+            Entity(id="ศุภกร", label="PERSON", name="ศุภกร", source_doc_ids=["doc-1"]),
+            Entity(id="โน้ต", label="PERSON", name="โน้ต", source_doc_ids=["doc-1"]),
+        ]
+        relations = [
+            Relation(
+                id="rel-1",
+                source_entity_id="ลัทธพล",
+                target_entity_id="team abap",
+                relation_type="MEMBER_OF",
+                source_doc_id="doc-1",
+            ),
+            Relation(
+                id="rel-2",
+                source_entity_id="ศุภกร",
+                target_entity_id="team abap",
+                relation_type="HAS_ROLE",
+                source_doc_id="doc-1",
+            ),
+            Relation(
+                id="rel-3",
+                source_entity_id="โน้ต",
+                target_entity_id="team abap",
+                relation_type="MENTIONS",
+                source_doc_id="doc-1",
+            ),
+        ]
+
+        ranked = Neo4jGraphRepository._rank_entities(entities, relations, seed_ids=["team abap"])
+        ranked_ids = [entity.id for entity in ranked]
+
+        assert ranked_ids[0] == "team abap"
+        assert ranked_ids[1] == "ลัทธพล"
+        assert ranked_ids.index("ศุภกร") < ranked_ids.index("โน้ต")
+
+    def test_rank_relations_prioritizes_membership_edges(self):
+        """Relation ordering should surface membership edges first for roster-like queries."""
+        from infrastructure.neo4j_graph_repository import Neo4jGraphRepository
+        from domain.entities import Relation
+
+        relations = [
+            Relation(id="rel-1", source_entity_id="ลัทธพล", target_entity_id="team abap", relation_type="HAS_ROLE", source_doc_id="doc-1"),
+            Relation(id="rel-2", source_entity_id="ศุภกร", target_entity_id="team abap", relation_type="MEMBER_OF", source_doc_id="doc-1"),
+            Relation(id="rel-3", source_entity_id="โน้ต", target_entity_id="team abap", relation_type="MENTIONS", source_doc_id="doc-1"),
+        ]
+
+        ranked = Neo4jGraphRepository._rank_relations(relations, seed_ids=["team abap"])
+        ranked_types = [relation.relation_type for relation in ranked]
+
+        assert ranked_types[0] == "MEMBER_OF"
+        assert ranked_types[1] == "HAS_ROLE"
 
 
 # ---------------------------------------------------------------------------
