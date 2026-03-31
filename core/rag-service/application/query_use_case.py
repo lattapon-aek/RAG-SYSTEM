@@ -43,17 +43,19 @@ logger = logging.getLogger(__name__)
 
 _QUERY_TIMEOUT = float(os.getenv("QUERY_TIMEOUT", "300"))  # seconds (300s for CPU Ollama)
 
+_ANSWER_SYSTEM_PROMPT = (
+    "/no_think You are a precise answer generator for an upstream agent. "
+    "Use ONLY the provided context. Answer the user's question directly and concisely. "
+    "Prefer the minimum text needed to be correct. Do not add background, filler, or speculation. "
+    "If multiple facts are needed, use short bullets. "
+    "If the context does not contain enough information, reply exactly: "
+    "'I don't have enough information to answer this question.'"
+)
+
 _ANSWER_PROMPT = (
-    "You are a helpful assistant. Answer the question using ONLY the information provided in the context below.\n"
-    "Rules:\n"
-    "- Do NOT use your own knowledge or training data.\n"
-    "- Do NOT make up information that is not in the context.\n"
-    "- If the context contains the answer, summarize it clearly.\n"
-    "- If the context does not contain enough information, say exactly: "
-    "'I don't have enough information to answer this question.'\n\n"
     "Context:\n{context}\n\n"
     "Question: {query}\n\n"
-    "Answer (based strictly on the context above):"
+    "Answer the question using only the context. Be direct and concise."
 )
 
 
@@ -399,7 +401,10 @@ class QueryUseCase:
                 gen_ctx = context_text
             prompt = _ANSWER_PROMPT.format(context=gen_ctx, query=query)
             try:
-                async for token in self._llm.generate_stream(prompt):
+                async for token in self._llm.generate_stream(
+                    prompt,
+                    system_prompt=_ANSWER_SYSTEM_PROMPT,
+                ):
                     yield _sse_event("token", {"content": token})
                     answer_parts.append(token)
             except asyncio.CancelledError:
@@ -732,7 +737,10 @@ class QueryUseCase:
             else:
                 gen_context = context_text
             prompt = _ANSWER_PROMPT.format(context=gen_context, query=query)
-            answer = await self._llm.generate(prompt)
+            answer = await self._llm.generate(
+                prompt,
+                system_prompt=_ANSWER_SYSTEM_PROMPT,
+            )
 
         if self._redis and client_id != "anonymous":
             output_tokens = len(answer.split())
