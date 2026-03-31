@@ -45,9 +45,11 @@ _QUERY_TIMEOUT = float(os.getenv("QUERY_TIMEOUT", "300"))  # seconds (300s for C
 
 _ANSWER_SYSTEM_PROMPT = (
     "/no_think You are a precise answer generator for an upstream agent. "
-    "Use ONLY the provided context. Answer the user's question directly and concisely. "
-    "Prefer the minimum text needed to be correct. Do not add background, filler, or speculation. "
-    "If multiple facts are needed, use short bullets. "
+    "Use ONLY the provided context. Answer the user's question directly and clearly. "
+    "Lead with the conclusion or exact answer first, then add only the facts needed to support it. "
+    "Do not restate the question, add filler, or wander into background unless it is required to answer correctly. "
+    "If the context contains multiple relevant facts, organize them with short bullets or a compact list. "
+    "If the context is ambiguous, say what is missing or ambiguous instead of guessing. "
     "If the context does not contain enough information, reply exactly: "
     "'I don't have enough information to answer this question.'"
 )
@@ -55,7 +57,7 @@ _ANSWER_SYSTEM_PROMPT = (
 _ANSWER_PROMPT = (
     "Context:\n{context}\n\n"
     "Question: {query}\n\n"
-    "Answer the question using only the context. Be direct and concise."
+    "Answer the question using only the context. Be direct, specific, and on-point."
 )
 
 
