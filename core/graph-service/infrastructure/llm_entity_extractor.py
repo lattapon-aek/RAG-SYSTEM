@@ -65,10 +65,30 @@ Rules:
 - label must be one of: PERSON, ORG, LOCATION, CONCEPT
 - use CONCEPT for roles, teams, systems, products, topics, or anything that does not clearly fit PERSON/ORG/LOCATION
 - relation type must be UPPERCASE_SNAKE_CASE (for example WORKS_WITH, PART_OF, REPORTS_TO, LOCATED_IN, MENTIONS)
+- prefer a small, stable relation vocabulary when possible:
+  MEMBER_OF, PART_OF, HAS_ROLE, REPORTS_TO, WORKS_WITH, RESPONSIBLE_FOR, GOOD_FOR, ALIAS_OF, MENTIONS
 - only include relations between entities that appear in the entities list
 - if no entities are found, return {"entities": [], "relations": []}
 - output ONLY the JSON object, no explanation, no markdown
 """
+
+_RELATION_NORMALIZATION = {
+    "ALIAS_OF": "ALIAS_OF",
+    "BELONGS": "MEMBER_OF",
+    "BELONGS_TO": "MEMBER_OF",
+    "GOOD_FOR": "GOOD_FOR",
+    "HAS_ROLE": "HAS_ROLE",
+    "IS_MEMBER_OF": "MEMBER_OF",
+    "MANAGES": "REPORTS_TO",
+    "MENTIONS": "MENTIONS",
+    "MEMBER_OF": "MEMBER_OF",
+    "PART_OF": "PART_OF",
+    "RESPONSIBLE_FOR": "RESPONSIBLE_FOR",
+    "REPORTS_TO": "REPORTS_TO",
+    "RELATED_TO": "RELATED_TO",
+    "WORKS_WITH": "WORKS_WITH",
+    "WORKS_IN": "PART_OF",
+}
 
 
 class LLMEntityExtractor(IEntityExtractor):
@@ -85,6 +105,20 @@ class LLMEntityExtractor(IEntityExtractor):
     _ROLE_LINE_RE = re.compile(
         r"(?:ทำหน้าที่เป็น|เป็น|มีบทบาทหลักในการ|รับผิดชอบ|เหมาะกับ)\s+(?P<role>[^.。\\n]{3,120})"
     )
+    _TEAM_CONTEXT_RE = re.compile(
+        r"(?:\bทีม\b|\bteam\b)\s+(?P<team>[^,。.\n]{2,80})",
+        re.IGNORECASE,
+    )
+    _TEAM_MEMBER_RE = re.compile(
+        r"(?P<person>[^,。.\n]{2,80}?)\s+"
+        r"(?:เป็นสมาชิก(?:ของ)?|อยู่(?:ใน)?|ทำงาน(?:อยู่)?ใน|สังกัด)\s+"
+        r"(?:ทีม\s+|team\s+)?(?P<team>[^,。.\n]{2,80})",
+        re.IGNORECASE,
+    )
+    _TEAM_STOP_RE = re.compile(
+        r"\s+(?:รับผิดชอบ|ดูแล|ทำหน้าที่|มีบทบาท|เป็น|ช่วย|โดย|เพื่อ|ซึ่ง|ที่|เมื่อ|และ)",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -93,19 +127,17 @@ class LLMEntityExtractor(IEntityExtractor):
         timeout: float = 180.0,
     ):
         cfg = build_model_config()
-        provider = cfg["graph_llm_provider"]
-        self._llm = create_chat_llm_service(
-            provider=provider,
-            model=model or cfg["graph_llm_model"],
-            ollama_base_url=(base_url or cfg["ollama_base_url"]).rstrip("/"),
-            openai_api_key=cfg["openai_api_key"],
-            typhoon_api_key=cfg["typhoon_api_key"],
-            typhoon_base_url=cfg["typhoon_base_url"],
-            anthropic_api_key=cfg["anthropic_api_key"],
-            azure_api_key=cfg["azure_api_key"],
-            azure_endpoint=cfg["azure_endpoint"],
-            azure_deployment=cfg["azure_deployment"],
-        )
+        self._graph_llm_provider = cfg["graph_llm_provider"]
+        self._graph_llm_model = model or cfg["graph_llm_model"]
+        self._graph_llm_base_url = (base_url or cfg["ollama_base_url"]).rstrip("/")
+        self._graph_llm_openai_api_key = cfg["openai_api_key"]
+        self._graph_llm_typhoon_api_key = cfg["typhoon_api_key"]
+        self._graph_llm_typhoon_base_url = cfg["typhoon_base_url"]
+        self._graph_llm_anthropic_api_key = cfg["anthropic_api_key"]
+        self._graph_llm_azure_api_key = cfg["azure_api_key"]
+        self._graph_llm_azure_endpoint = cfg["azure_endpoint"]
+        self._graph_llm_azure_deployment = cfg["azure_deployment"]
+        self._llm = None
         self._timeout = timeout
         self._system_prompt = os.getenv("GRAPH_ENTITY_SYSTEM_PROMPT", _DEFAULT_SYSTEM_PROMPT)
         self.last_extraction_mode = "empty"
@@ -128,9 +160,13 @@ class LLMEntityExtractor(IEntityExtractor):
         all_relations: dict[tuple[str, str, str], Relation] = {}
         heuristic_blocks = 0
         llm_blocks = 0
+        document_team_ids: set[str] = set()
 
         for block in blocks:
             entities, relations = self._heuristic_extract(block, document_id)
+            block_team_ids = set(self._extract_team_context_candidates(block))
+            if block_team_ids:
+                document_team_ids.update(block_team_ids)
             if not entities and not relations:
                 raw = await self._call_llm(block)
                 if raw:
@@ -140,6 +176,19 @@ class LLMEntityExtractor(IEntityExtractor):
                 heuristic_blocks += 1
 
             self._merge_results(all_entities, all_relations, entities, relations)
+
+            if len(document_team_ids) == 1 and entities:
+                team_id = next(iter(document_team_ids))
+                if team_id in all_entities:
+                    for entity in entities:
+                        if entity.label == "PERSON":
+                            self._add_relation(
+                                all_relations,
+                                entity.id,
+                                team_id,
+                                "MEMBER_OF",
+                                document_id,
+                            )
 
         self.last_heuristic_blocks = heuristic_blocks
         self.last_llm_blocks = llm_blocks
@@ -187,7 +236,8 @@ class LLMEntityExtractor(IEntityExtractor):
 
     async def _call_llm(self, text: str) -> str:
         try:
-            return await self._llm.generate(
+            llm = self._get_llm()
+            return await llm.generate(
                 f"Extract entities and relations from:\n\n{text[:4000]}",
                 system_prompt=self._system_prompt,
                 max_tokens=1024,
@@ -195,6 +245,22 @@ class LLMEntityExtractor(IEntityExtractor):
         except Exception as exc:
             logger.warning("LLMEntityExtractor: LLM call failed: %s", exc)
             return ""
+
+    def _get_llm(self):
+        if self._llm is None:
+            self._llm = create_chat_llm_service(
+                provider=self._graph_llm_provider,
+                model=self._graph_llm_model,
+                ollama_base_url=self._graph_llm_base_url,
+                openai_api_key=self._graph_llm_openai_api_key,
+                typhoon_api_key=self._graph_llm_typhoon_api_key,
+                typhoon_base_url=self._graph_llm_typhoon_base_url,
+                anthropic_api_key=self._graph_llm_anthropic_api_key,
+                azure_api_key=self._graph_llm_azure_api_key,
+                azure_endpoint=self._graph_llm_azure_endpoint,
+                azure_deployment=self._graph_llm_azure_deployment,
+            )
+        return self._llm
 
     @staticmethod
     def _split_text(text: str) -> List[str]:
@@ -243,18 +309,26 @@ class LLMEntityExtractor(IEntityExtractor):
         entities: dict[str, Entity] = {}
         relations: dict[tuple[str, str, str], Relation] = {}
         concept_ids: set[str] = set()
+        person_entities_in_block: list[Entity] = []
+        team_candidates: dict[str, Entity] = {}
 
         for line in [line.strip() for line in normalized.splitlines() if line.strip()]:
             heading_match = self._HEADING_RE.match(line)
             if heading_match:
                 title = heading_match.group("title").strip()
-                if title and not self._looks_like_person_heading(title):
+                heading_team = self._extract_team_context(title)
+                if heading_team:
+                    team_entity = self._add_entity(entities, heading_team, "ORG", document_id)
+                    team_candidates[team_entity.id] = team_entity
+                elif title and not self._looks_like_person_heading(title):
                     self._add_entity(entities, title, "CONCEPT", document_id)
                     concept_ids.add(self._canonical_id(title))
 
             person_name, nickname, role = self._extract_person_facts(line)
             if person_name:
                 person = self._add_entity(entities, person_name, "PERSON", document_id)
+                if person not in person_entities_in_block:
+                    person_entities_in_block.append(person)
                 if nickname and nickname != person_name:
                     alias = self._add_entity(entities, nickname, "PERSON", document_id)
                     self._add_relation(relations, alias.id, person.id, "ALIAS_OF", document_id)
@@ -263,9 +337,35 @@ class LLMEntityExtractor(IEntityExtractor):
                     role_entity = self._add_entity(entities, role, "CONCEPT", document_id)
                     self._add_relation(relations, person.id, role_entity.id, "HAS_ROLE", document_id)
 
+                explicit_team = self._extract_team_context(line)
+                if explicit_team:
+                    team_entity = self._add_entity(entities, explicit_team, "ORG", document_id)
+                    team_candidates[team_entity.id] = team_entity
+                    self._add_relation(relations, person.id, team_entity.id, "MEMBER_OF", document_id)
+
+            explicit_membership = self._extract_explicit_membership(line)
+            if explicit_membership and all(explicit_membership):
+                member_name, team_name = explicit_membership
+                member = self._add_entity(entities, member_name, "PERSON", document_id)
+                if member not in person_entities_in_block:
+                    person_entities_in_block.append(member)
+                team_entity = self._add_entity(entities, team_name, "ORG", document_id)
+                team_candidates[team_entity.id] = team_entity
+                self._add_relation(relations, member.id, team_entity.id, "MEMBER_OF", document_id)
+
+            team_context = self._extract_team_context(line)
+            if team_context:
+                team_entity = self._add_entity(entities, team_context, "ORG", document_id)
+                team_candidates[team_entity.id] = team_entity
+
             for concept in self._extract_uppercase_concepts(line):
                 concept_entity = self._add_entity(entities, concept, "CONCEPT", document_id)
                 concept_ids.add(concept_entity.id)
+
+        if len(team_candidates) == 1 and person_entities_in_block:
+            team_entity = next(iter(team_candidates.values()))
+            for person in person_entities_in_block:
+                self._add_relation(relations, person.id, team_entity.id, "MEMBER_OF", document_id)
 
         # If a block has no person-specific facts but has strong uppercase concepts,
         # still emit those nodes so the graph is queryable.
@@ -341,9 +441,68 @@ class LLMEntityExtractor(IEntityExtractor):
                 return tail
         return None
 
+    def _extract_team_context(self, text: str) -> str | None:
+        match = self._TEAM_CONTEXT_RE.search(text)
+        if not match:
+            return None
+        return self._trim_team_name(match.group("team"))
+
+    def _extract_team_context_candidates(self, text: str) -> List[str]:
+        candidates: List[str] = []
+        for line in [line.strip() for line in text.replace("\r\n", "\n").splitlines() if line.strip()]:
+            team = self._extract_team_context(line)
+            if team:
+                canonical = self._canonical_id(team)
+                if canonical not in candidates:
+                    candidates.append(canonical)
+        return candidates
+
+    def _extract_explicit_membership(self, text: str) -> tuple[str | None, str | None]:
+        membership_match = self._TEAM_MEMBER_RE.search(text)
+        if membership_match:
+            person = self._normalize_name(membership_match.group("person"))
+            team = self._trim_team_name(membership_match.group("team"))
+            if person and team:
+                return person, team
+
+        if not any(marker in text for marker in ("เป็นสมาชิก", "อยู่ใน", "ทำงานใน", "สังกัด")):
+            return None, None
+
+        person = None
+        for marker in ("เป็นสมาชิก", "อยู่ใน", "ทำงานใน", "สังกัด"):
+            if marker not in text:
+                continue
+            left = text.split(marker, 1)[0].strip(" -:—–\t")
+            person, _ = self._extract_name_and_nickname(left)
+            if person:
+                break
+        if not person:
+            person, _ = self._extract_name_and_nickname(text)
+        if not person:
+            return None, None
+
+        team = self._extract_team_context(text)
+        if not team:
+            return None, None
+
+        return person, team
+
+    def _trim_team_name(self, value: str) -> str | None:
+        cleaned = re.sub(r"\s+", " ", value.strip())
+        if not cleaned:
+            return None
+        stop_match = self._TEAM_STOP_RE.search(cleaned)
+        if stop_match:
+            cleaned = cleaned[: stop_match.start()].strip()
+        cleaned = cleaned.rstrip("：:,-–—")
+        return cleaned or None
+
     def _extract_uppercase_concepts(self, line: str) -> List[str]:
         concepts: List[str] = []
-        for token in self._UPPER_CONCEPT_RE.findall(line):
+        tokens = []
+        tokens.extend(re.findall(r"\b[A-Z]{2,}\b", line))
+        tokens.extend(self._UPPER_CONCEPT_RE.findall(line))
+        for token in tokens:
             if len(token) < 2:
                 continue
             # Avoid capturing markdown markers and noisy punctuation.
@@ -387,7 +546,7 @@ class LLMEntityExtractor(IEntityExtractor):
     ) -> None:
         if not source_id or not target_id or source_id == target_id:
             return
-        rel_type = relation_type.upper().replace(" ", "_")
+        rel_type = self._normalize_relation_type(relation_type)
         key = (source_id, target_id, rel_type)
         if key in relations:
             return
@@ -409,6 +568,11 @@ class LLMEntityExtractor(IEntityExtractor):
             return None
         cleaned = re.sub(r"\s+", " ", value.strip())
         return cleaned or None
+
+    @staticmethod
+    def _normalize_relation_type(value: str) -> str:
+        rel_type = value.upper().replace(" ", "_")
+        return _RELATION_NORMALIZATION.get(rel_type, rel_type)
 
     @staticmethod
     def _looks_like_person_heading(text: str) -> bool:
@@ -459,7 +623,7 @@ class LLMEntityExtractor(IEntityExtractor):
         for r in data.get("relations", []):
             src = str(r.get("source", "")).strip().lower()
             tgt = str(r.get("target", "")).strip().lower()
-            rel_type = str(r.get("type", "RELATED_TO")).upper().replace(" ", "_")
+            rel_type = self._normalize_relation_type(str(r.get("type", "RELATED_TO")))
             if src not in entity_ids or tgt not in entity_ids or src == tgt:
                 continue
             relations.append(Relation(
