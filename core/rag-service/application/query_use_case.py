@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -126,6 +127,36 @@ class QueryUseCase:
     def _resolve_client_id(request: QueryRequest) -> str:
         return request.client_id or request.user_id or "anonymous"
 
+    @staticmethod
+    def _extract_graph_seed_names(query: str) -> List[str]:
+        cleaned = query.strip()
+        if not cleaned:
+            return []
+
+        seeds: List[str] = []
+
+        team_match = re.search(
+            r"(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        if team_match:
+            team_tail = team_match.group(1).strip()
+            team_name = re.sub(
+                r"\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$",
+                "",
+                team_tail,
+                flags=re.IGNORECASE,
+            ).strip(" ,.;:，。")
+            if team_name:
+                seeds.append(team_name)
+
+        for token in re.findall(r"\b[A-Z]{2,}\b", cleaned):
+            if token not in seeds:
+                seeds.append(token)
+
+        return list(dict.fromkeys(seeds))
+
     async def _retrieve_one_namespace(
         self,
         retrieval_embedding: list,
@@ -138,8 +169,14 @@ class QueryUseCase:
         vector_task = self._vector_store.search(
             retrieval_embedding, top_k=top_k, namespace=namespace
         )
+        graph_entity_names = self._extract_graph_seed_names(retrieval_query)
         graph_task = (
-            self._graph.query_related_entities(retrieval_query, top_k=top_k, namespace=namespace)
+            self._graph.query_related_entities(
+                retrieval_query,
+                top_k=top_k,
+                namespace=namespace,
+                entity_names=graph_entity_names,
+            )
             if self._graph and use_graph
             else asyncio.coroutine(lambda: [])()
         )

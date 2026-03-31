@@ -400,7 +400,10 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
         try:
             ns_graph_tasks = [
                 use_case._graph.query_related_entities(
-                    retrieval_query, top_k=req.top_k, namespace=ns
+                    retrieval_query,
+                    top_k=req.top_k,
+                    namespace=ns,
+                    entity_names=use_case._extract_graph_seed_names(retrieval_query),
                 )
                 for ns in effective_namespaces
             ]

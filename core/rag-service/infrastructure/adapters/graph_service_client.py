@@ -3,7 +3,8 @@ Graph Service HTTP client with circuit breaker protection
 """
 import asyncio
 import logging
-from typing import List, Dict, Any
+import re
+from typing import List, Dict, Any, Optional
 
 import httpx
 
@@ -39,16 +40,51 @@ class GraphServiceClient(IGraphService):
         self._base_url = base_url.rstrip("/")
         self._breaker = get_breaker("graph")
 
-    async def query_related_entities(self, query: str,
-                                     top_k: int = 10,
-                                     namespace: str = "default") -> List[Dict[str, Any]]:
+    @staticmethod
+    def _extract_seed_names(query: str) -> List[str]:
+        cleaned = query.strip()
+        if not cleaned:
+            return []
+
+        seeds: List[str] = []
+
+        team_match = re.search(
+            r"(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        if team_match:
+            team_tail = team_match.group(1).strip()
+            team_name = re.sub(
+                r"\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$",
+                "",
+                team_tail,
+                flags=re.IGNORECASE,
+            ).strip(" ,.;:，。")
+            if team_name:
+                seeds.append(team_name)
+
+        for token in re.findall(r"\b[A-Z]{2,}\b", cleaned):
+            if token not in seeds:
+                seeds.append(token)
+
+        return list(dict.fromkeys(seeds))
+
+    async def query_related_entities(
+        self,
+        query: str,
+        top_k: int = 10,
+        namespace: str = "default",
+        entity_names: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         async def _call():
+            seeds = entity_names if entity_names is not None else self._extract_seed_names(query)
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
                     f"{self._base_url}/graph/query",
                     json={
                         "query_text": query,
-                        "entity_names": [],
+                        "entity_names": seeds,
                         "max_hops": 2,
                         "namespace": namespace,
                     },

@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List
 
 from application.ports.i_entity_extractor import IEntityExtractor
@@ -32,6 +33,7 @@ class ExtractEntitiesUseCase:
         heuristic_blocks = int(getattr(self._extractor, "last_heuristic_blocks", 0) or 0)
         llm_blocks = int(getattr(self._extractor, "last_llm_blocks", 0) or 0)
         total_blocks = int(getattr(self._extractor, "last_total_blocks", 0) or 0)
+        validation = self._validate_graph_quality(text, entities, relations)
 
         graph_stored = False
         error_message = None
@@ -60,6 +62,9 @@ class ExtractEntitiesUseCase:
             "heuristic_blocks": heuristic_blocks,
             "llm_blocks": llm_blocks,
             "total_blocks": total_blocks,
+            "validation_status": validation["status"],
+            "validation_issues": validation["issues"],
+            "validation_summary": validation["summary"],
         }
 
         if dry_run:
@@ -67,3 +72,29 @@ class ExtractEntitiesUseCase:
             result["relations"] = [r.__dict__ for r in relations]
 
         return result
+
+    @staticmethod
+    def _validate_graph_quality(text: str, entities: List[Entity], relations: List[Relation]) -> dict:
+        normalized = text.lower()
+        person_count = sum(1 for entity in entities if entity.label == "PERSON")
+        membership_count = sum(
+            1
+            for relation in relations
+            if relation.relation_type in {"MEMBER_OF", "PART_OF"}
+        )
+
+        issues: list[str] = []
+        team_like = bool(re.search(r"(?:\bทีม\b|\bteam\b)", normalized))
+
+        if team_like and person_count >= 2 and membership_count == 0:
+            issues.append("team_document_without_membership_relations")
+        if team_like and person_count >= 2 and membership_count < max(1, person_count // 2):
+            issues.append("sparse_membership_relations")
+
+        status = "pass" if not issues else "needs_review"
+        summary = "graph_quality_ok" if not issues else ",".join(issues)
+        return {
+            "status": status,
+            "issues": issues,
+            "summary": summary,
+        }
