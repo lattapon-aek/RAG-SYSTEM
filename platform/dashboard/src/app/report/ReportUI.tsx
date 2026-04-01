@@ -13,7 +13,7 @@ interface MemoryUser {
 interface MetricsSummary {
   query_volume_total: number
   avg_retrieval_latency_ms: number
-  avg_generation_latency_ms: number
+  avg_answer_latency_ms: number
   avg_total_latency_ms: number
   error_rate: number
   cache_hit_rate: number
@@ -176,7 +176,7 @@ export default function ReportUI() {
               </div>
               <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
                 <p className="text-xs text-gray-400 mb-1">Generation Latency (avg)</p>
-                <p className="text-xl font-bold text-blue-400">{loading ? '—' : ms(m?.avg_generation_latency_ms)}</p>
+                <p className="text-xl font-bold text-blue-400">{loading ? '—' : ms(m?.avg_answer_latency_ms)}</p>
               </div>
               <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
                 <p className="text-xs text-gray-400 mb-1">Total Latency (avg)</p>

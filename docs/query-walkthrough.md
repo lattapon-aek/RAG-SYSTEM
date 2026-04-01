@@ -1,10 +1,10 @@
 # Query Walkthrough
 
-This page follows a user question from the moment it is submitted until the system returns an answer with supporting evidence.
+This page follows a user question from the moment it is submitted until the system returns a structured context brief with supporting evidence.
 
 ## Why this matters
 
-Query handling is where the RAG design becomes visible. You can see retrieval, reranking, memory use, grounding, and citation checks all in one pipeline.
+Query handling is where the RAG design becomes visible. You can see retrieval, reranking, memory use, grounding, and context shaping all in one pipeline.
 
 ## End-to-end flow
 
@@ -15,8 +15,8 @@ User asks a question
   -> Retrieval runs against vector and graph sources
   -> Results are merged and reranked
   -> Context is built and compressed
-  -> The answer is generated and verified
-  -> Citations and metadata are returned
+  -> The context brief is assembled and verified
+  -> Supporting evidence and metadata are returned
 ```
 
 ```mermaid
@@ -33,9 +33,9 @@ flowchart LR
     V --> MRG[Merge and rerank]
     G --> MRG
     MRG --> CTX[Context builder]
-    CTX --> GEN[Answer generation]
-    GEN --> VER[Grounding / citation verification]
-    VER --> O[Answer + citations]
+    CTX --> ANS[Context brief]
+    ANS --> VER[Grounding / evidence verification]
+    VER --> O[Context brief + evidence]
 ```
 
 ## Step by step
@@ -80,7 +80,7 @@ This step helps the final context focus on the passages that are most useful for
 
 ### 5. Context is built
 
-The use case then prepares the final context for generation.
+The use case then prepares the final context for downstream context brief assembly.
 
 It may:
 
@@ -92,17 +92,17 @@ It may:
 
 This is the stage where retrieval output becomes prompt-ready evidence.
 
-### 6. The answer is generated
+### 6. The context brief is assembled from context
 
-Once the prompt is ready, the generation layer produces the answer.
+Once the context is ready, the service returns the context-derived brief directly.
 
 The pipeline can work in streaming or non-streaming mode, depending on the caller. Streaming is useful when the UI should show partial output quickly.
 
-### 7. Citations and verification happen at the end
+### 7. Evidence checks happen at the end
 
-The service does not stop at text generation.
+The service does not stop at context assembly.
 
-It also checks whether the answer is grounded in the retrieved evidence and returns citations or supporting references with the final response.
+It checks whether the returned brief is grounded in the retrieved evidence and returns supporting references with the final response.
 
 ### 8. Feedback can be recorded
 
@@ -112,7 +112,7 @@ That data helps the intelligence layer learn where the system needs better retri
 
 ### 9. Streaming and non-streaming share the same core pipeline
 
-The final generation step can return output in one shot or stream tokens incrementally.
+The final context-answer step can return output in one shot or stream tokens incrementally.
 
 Both modes use the same upstream retrieval and context-building stages, so debugging usually starts above the response delivery layer, not at the transport layer.
 
@@ -121,7 +121,7 @@ Both modes use the same upstream retrieval and context-building stages, so debug
 - `core/rag-service/interface/routers.py`
 - `core/rag-service/application/query_use_case.py`
 - `core/rag-service/application/retrieval/`
-- `core/rag-service/application/generation/`
+- `core/rag-service/application/context_compressor.py`
 - `core/rag-service/infrastructure/`
 - `intelligence-service/main.py`
 
@@ -133,6 +133,5 @@ If a question gets a weak answer, the problem usually sits in one of these place
 - retrieval quality
 - reranking
 - context packing
-- tool routing
-- generation settings
-- citation verification
+- compression settings
+- evidence verification

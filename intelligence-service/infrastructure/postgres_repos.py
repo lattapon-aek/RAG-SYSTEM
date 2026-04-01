@@ -62,7 +62,7 @@ class PostgresInteractionRepo(IInteractionRepository):
             query_length=len(query_text),
             answer_length=len(answer_text),
             retrieval_latency_ms=0.0,
-            generation_latency_ms=0.0,
+            answer_latency_ms=0.0,
             total_latency_ms=0.0,
             from_cache=False,
             confidence_score=float(r.get("confidence_score") or 1.0),

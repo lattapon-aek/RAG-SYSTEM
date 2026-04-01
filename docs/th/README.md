@@ -53,7 +53,7 @@ flowchart LR
     C --> Q
     PG --> Q
     N --> Q
-    Q --> O[Answer / result]
+    Q --> O[Context brief / result]
 ```
 
 ## Service Map
@@ -109,8 +109,8 @@ flowchart TB
 - `chunking` คือการแบ่งเอกสารเป็นส่วนย่อยเพื่อให้ index และค้นหาได้
 - `embedding` คือการแปลงข้อความเป็น vector สำหรับหา semantic similarity
 - `reranking` คือการเรียงลำดับ candidate หลัง retrieval รอบแรก
-- `grounding` คือการทำให้คำตอบยึดกับหลักฐานจาก source จริง
-- `citation` คือการอ้างอิง passage หรือแหล่งข้อมูลที่ใช้ตอบ
+- `grounding` คือการทำให้ context หรือ brief ที่ส่งต่อยึดกับหลักฐานจาก source จริง
+- `citation` คือการอ้างอิง passage หรือแหล่งข้อมูลที่ใช้ประกอบ brief
 - `memory` คือ context ที่เก็บไว้เพื่อใช้ซ้ำ
 - `graph extraction` คือการดึง entity และความสัมพันธ์ออกมาเป็น graph
 

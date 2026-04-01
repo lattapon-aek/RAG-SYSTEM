@@ -53,14 +53,17 @@ class QueryResult:
     answer: str
     citations: List[Citation]
     graph_entities: List[Dict[str, Any]] = field(default_factory=list)
+    graph_summary_texts: List[str] = field(default_factory=list)
     graph_seed_names: List[str] = field(default_factory=list)
+    graph_seed_source: str = "empty"
+    graph_seed_strategy: str = "none"
     rewritten_query: Optional[str] = None
     hyde_used: bool = False
     sub_queries: List[str] = field(default_factory=list)
     tool_calls: List["ToolCall"] = field(default_factory=list)
     from_cache: bool = False
     retrieval_latency_ms: float = 0.0
-    generation_latency_ms: float = 0.0
+    answer_latency_ms: float = 0.0
     total_latency_ms: float = 0.0
     confidence_score: float = 1.0
     grounding_score: float = 1.0

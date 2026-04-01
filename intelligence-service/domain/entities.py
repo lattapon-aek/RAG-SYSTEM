@@ -101,7 +101,7 @@ class InteractionRecord:
     query_length: int
     answer_length: int
     retrieval_latency_ms: float
-    generation_latency_ms: float
+    answer_latency_ms: float
     total_latency_ms: float
     from_cache: bool = False
     confidence_score: float = 1.0

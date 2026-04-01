@@ -48,7 +48,7 @@ flowchart LR
     C --> Q
     PG --> Q
     N --> Q
-    Q --> O[Answer / result]
+    Q --> O[Context brief / result]
 ```
 
 ## Service Map
@@ -105,7 +105,7 @@ Reading the flow from top to bottom helps connect the docs to the codebase:
 3. `Design` shows how the services and layers are split
 4. `Task` shows where the behavior lives in code
 5. `Ingestion walkthrough` shows how a document becomes searchable
-6. `Query walkthrough` shows how a question becomes an answer
+6. `Query walkthrough` shows how a question becomes a context brief
 
 ## Reading Graph
 

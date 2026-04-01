@@ -25,7 +25,7 @@ def get_repository() -> Neo4jGraphRepository:
 def get_extractor() -> IEntityExtractor:
     global _extractor
     if _extractor is None:
-        backend = os.getenv("GRAPH_EXTRACTOR_BACKEND", "spacy").lower()
+        backend = os.getenv("GRAPH_EXTRACTOR_BACKEND", "llm").lower()
         if backend == "llm":
             from infrastructure.llm_entity_extractor import LLMEntityExtractor
             timeout = float(os.getenv("GRAPH_EXTRACTOR_TIMEOUT_SECONDS", "180"))

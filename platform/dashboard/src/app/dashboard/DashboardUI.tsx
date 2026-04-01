@@ -148,7 +148,7 @@ export default function DashboardUI({
                   />
                   <StatCard
                     title="Avg Generation"
-                    value={`${(metrics.avg_generation_latency_ms ?? 0).toFixed(1)} ms`}
+                    value={`${(metrics.avg_answer_latency_ms ?? 0).toFixed(1)} ms`}
                     subtitle="LLM latency"
                     color="purple"
                   />

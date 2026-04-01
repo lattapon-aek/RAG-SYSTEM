@@ -37,29 +37,45 @@ function embeddingDefault(provider: string) {
 
 export function modelConfig() {
   const llmProvider = envFirst(['LLM_PROVIDER'], 'ollama')
-  const utilityLlmProvider = envFirst(['UTILITY_LLM_PROVIDER'], llmProvider)
-  const generationLlmProvider = envFirst(['GENERATION_LLM_PROVIDER'], llmProvider)
-  const graphLlmProvider = envFirst(['GRAPH_LLM_PROVIDER'], utilityLlmProvider)
-  const gapDraftLlmProvider = envFirst(['GAP_DRAFT_LLM_PROVIDER'], generationLlmProvider)
+  const queryRewriteLlmProvider = envFirst(['QUERY_REWRITE_LLM_PROVIDER', 'UTILITY_LLM_PROVIDER'], llmProvider)
+  const hydeLlmProvider = envFirst(['HYDE_LLM_PROVIDER', 'UTILITY_LLM_PROVIDER'], queryRewriteLlmProvider)
+  const queryDecomposerLlmProvider = envFirst(['QUERY_DECOMPOSER_LLM_PROVIDER', 'UTILITY_LLM_PROVIDER'], queryRewriteLlmProvider)
+  const querySeedLlmProvider = envFirst(['QUERY_SEED_LLM_PROVIDER', 'GRAPH_QUERY_SEED_LLM_PROVIDER', 'UTILITY_LLM_PROVIDER'], llmProvider)
+  const utilityLlmProvider = queryRewriteLlmProvider
+  const compressionLlmProvider = envFirst(['COMPRESSION_LLM_PROVIDER'], llmProvider)
+  const graphLlmProvider = envFirst(['GRAPH_LLM_PROVIDER'], querySeedLlmProvider)
+  const gapDraftLlmProvider = envFirst(['GAP_DRAFT_LLM_PROVIDER'], llmProvider)
   const embeddingProvider = envFirst(['EMBEDDING_PROVIDER'], 'ollama')
   const llmFallback = llmDefault(llmProvider)
-  const utilityFallback = llmDefault(utilityLlmProvider)
-  const generationFallback = llmDefault(generationLlmProvider)
+  const queryRewriteFallback = llmDefault(queryRewriteLlmProvider)
+  const hydeFallback = llmDefault(hydeLlmProvider)
+  const queryDecomposerFallback = llmDefault(queryDecomposerLlmProvider)
+  const querySeedFallback = llmDefault(querySeedLlmProvider)
+  const compressionFallback = llmDefault(compressionLlmProvider)
   const graphFallback = llmDefault(graphLlmProvider)
   const gapDraftFallback = llmDefault(gapDraftLlmProvider)
   const embeddingFallback = embeddingDefault(embeddingProvider)
   return {
     llmProvider,
     utilityLlmProvider,
-    generationLlmProvider,
+    queryRewriteLlmProvider,
+    hydeLlmProvider,
+    queryDecomposerLlmProvider,
+    querySeedLlmProvider,
+    compressionLlmProvider,
     graphLlmProvider,
     gapDraftLlmProvider,
     embeddingProvider,
     llmModel: llmFallback,
-    utilityLlmModel: envFirst(['UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], utilityFallback),
-    generationLlmModel: envFirst(['GENERATION_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], generationFallback),
+    utilityLlmModel: envFirst(['QUERY_REWRITE_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], queryRewriteFallback),
+    queryRewriteLlmModel: envFirst(['QUERY_REWRITE_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], queryRewriteFallback),
+    hydeLlmModel: envFirst(['HYDE_LLM_MODEL', 'QUERY_REWRITE_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], hydeFallback),
+    queryDecomposerLlmModel: envFirst(['QUERY_DECOMPOSER_LLM_MODEL', 'UTILITY_LLM_MODEL', 'QUERY_REWRITE_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], queryDecomposerFallback),
+    querySeedLlmModel: envFirst(['QUERY_SEED_LLM_MODEL', 'GRAPH_QUERY_SEED_LLM_MODEL', 'QUERY_REWRITE_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], querySeedFallback),
+    compressionLlmModel: envFirst(['COMPRESSION_LLM_MODEL', 'QUERY_REWRITE_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], compressionFallback),
     graphLlmModel: envFirst(['GRAPH_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], graphFallback),
-    gapDraftLlmModel: envFirst(['GAP_DRAFT_LLM_MODEL', 'GENERATION_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], gapDraftFallback),
+    gapDraftLlmModel: envFirst(['GAP_DRAFT_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], gapDraftFallback),
+    compressionLlmSystemPrompt: envFirst(['COMPRESSION_LLM_SYSTEM_PROMPT'], ''),
     embeddingModel: envFirst(['EMBEDDING_MODEL', 'OLLAMA_EMBEDDING_MODEL'], embeddingFallback),
     ollamaBaseUrl: envFirst(['OLLAMA_BASE_URL'], 'http://ollama:11434'),
     typhoonBaseUrl: envFirst(['TYPHOON_BASE_URL'], 'https://api.opentyphoon.ai/v1'),

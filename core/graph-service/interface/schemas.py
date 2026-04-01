@@ -30,6 +30,9 @@ class ExtractResponse(BaseModel):
     heuristic_blocks: int = 0
     llm_blocks: int = 0
     total_blocks: int = 0
+    graph_extractor_backend: str = "unknown"
+    graph_system_prompt_source: str = "unknown"
+    graph_system_prompt_overridden: bool = False
     entities: Optional[List["EntityOut"]] = None
     relations: Optional[List["RelationOut"]] = None
 

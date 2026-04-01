@@ -47,7 +47,10 @@ interface RetrieveResult {
   query: string
   chunks: RetrieveChunk[]
   graph_entities: Array<{ name: string; type: string }>
+  graph_summary_texts?: string[]
   graph_seed_names?: string[]
+  graph_seed_source?: string
+  graph_seed_strategy?: string
   retrieval_latency_ms: number
   total_chunks_before_rerank: number
   // pipeline stage metadata
@@ -70,12 +73,15 @@ interface FullQueryResult {
   answer: string
   citations: RetrieveChunk[]
   graph_entities: Array<{ name: string; type: string }>
+  graph_summary_texts?: string[]
   graph_seed_names?: string[]
+  graph_seed_source?: string
+  graph_seed_strategy?: string
   rewritten_query?: string
   hyde_used?: boolean
   from_cache?: boolean
   retrieval_latency_ms: number
-  generation_latency_ms: number
+  answer_latency_ms: number
   total_latency_ms: number
   grounding_score: number
   low_confidence: boolean
@@ -93,11 +99,12 @@ const STAGE_TO_NODE: Record<string, string> = {
   short_memory: 'shortmem',
   long_memory: 'longmem',
   q_intel: 'qintel',
+  graph_seed: 'graphseed',
   vector: 'vector',
   graph: 'graph',
   rerank: 'rerank',
   context: 'context',
-  llm: 'llm',
+  answer: 'answer',
 }
 
 interface PipelineExtras {
@@ -106,6 +113,9 @@ interface PipelineExtras {
   topK?: number
   topN?: number
   graphSeedNames?: string[]
+  graphSeedSource?: string
+  graphSeedStrategy?: string
+  graphSummaryTexts?: string[]
 }
 
 interface PipelineData {
@@ -128,15 +138,24 @@ const EMPTY_PIPELINE: PipelineData = {
 interface SystemConfig {
   llmProvider: string
   utilityLlmProvider: string
-  generationLlmProvider: string
+  queryRewriteLlmProvider: string
+  hydeLlmProvider: string
+  queryDecomposerLlmProvider: string
+  querySeedLlmProvider: string
+  compressionLlmProvider: string
   graphLlmProvider: string
   gapDraftLlmProvider: string
   embeddingProvider: string
   llmModel: string
   utilityLlmModel: string
-  generationLlmModel: string
+  queryRewriteLlmModel: string
+  hydeLlmModel: string
+  queryDecomposerLlmModel: string
+  querySeedLlmModel: string
+  compressionLlmModel: string
   graphLlmModel: string
   gapDraftLlmModel: string
+  compressionLlmSystemPrompt: string
   embeddingModel: string
   semanticCacheThreshold: string
   enableMemory: string
@@ -144,7 +163,11 @@ interface SystemConfig {
   vectorStore: string
   enableGraph: string
   graphExtractorBackend: string
+  graphQuerySeedSystemPrompt: string
+  graphQuerySeedMaxTokens: string
   rerankerBackend: string
+  rerankerLlmUrl: string
+  rerankerLlmModel: string
   compressor: string
   contextCompressionThreshold: string
   contextDedupOverlapThreshold: string
@@ -179,17 +202,26 @@ function extractGraphSeedNames(query: string): string[] {
   if (!cleaned) return []
 
   const seeds: string[] = []
-  const teamMatch = cleaned.match(/(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})/i)
-  if (teamMatch) {
-    const teamTail = teamMatch[1].trim()
-    const teamName = teamTail
-      .replace(/\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$/i, '')
-      .replace(/^[\s,.;:，。]+|[\s,.;:，。]+$/g, '')
-    if (teamName) seeds.push(teamName)
-  }
+  let markerHit = false
 
   for (const token of cleaned.match(/\b[A-Z]{2,}\b/g) ?? []) {
     if (!seeds.includes(token)) seeds.push(token)
+  }
+
+  const compact = cleaned.replace(/\s+/g, '')
+  for (const marker of ['เป็นใคร', 'คือใคร', 'เป็นอะไร', 'คืออะไร', 'ใครเป็น']) {
+    if (compact.includes(marker)) {
+      const prefix = compact.split(marker, 1)[0].trim().replace(/^[\s,.;:，。]+|[\s,.;:，。]+$/g, '')
+      if (prefix && !seeds.includes(prefix)) seeds.push(prefix)
+      markerHit = true
+      break
+    }
+  }
+
+  if (!markerHit && compact && cleaned.split(/\s+/).length === 1) {
+    if (/[A-Za-zก-๙]/.test(compact) && !seeds.includes(compact)) {
+      seeds.push(compact)
+    }
   }
 
   return Array.from(new Set(seeds))
@@ -252,19 +284,20 @@ interface PNode {
 }
 
 // viewBox: 0 0 790 230
-// Columns: Query | User Context | Q.Intel | Retrieval | Reranker | Generation | Out
+// Columns: Query | User Context | Q.Intel | Retrieval | Reranker | Context Answer | Out
 const PIPELINE_NODES: PNode[] = [
   { id: 'query',    label: 'Query In',        icon: '⬦',  sublabel: 'embed → vector',           x: 4,   y: 101, w: 70,  h: 26, color: '#4b5563', group: 'always' },
-  { id: 'cache',    label: 'Semantic Cache',  icon: '⚡', sublabel: 'Redis',                    x: 96,  y: 36,  w: 94,  h: 26, color: '#7c3aed', group: 'full' },
+  { id: 'cache',    label: 'Semantic Cache',  icon: '⚡', sublabel: 'Redis',                    x: 96,  y: 20,  w: 94,  h: 26, color: '#7c3aed', group: 'full' },
   { id: 'shortmem', label: 'Short Memory',   icon: '◎',  sublabel: 'Redis · profile',          x: 96,  y: 101, w: 94,  h: 26, color: '#0891b2', group: 'full' },
-  { id: 'longmem',  label: 'Long Memory',    icon: '⊙',  sublabel: 'PG · profile',             x: 96,  y: 166, w: 94,  h: 26, color: '#0891b2', group: 'full' },
-  { id: 'qintel',   label: 'Query Intel.',   icon: '✦',  sublabel: 'rewrite/HyDE',              x: 212, y: 101, w: 92,  h: 26, color: '#8b5cf6', group: 'full' },
-  { id: 'vector',   label: 'Vector Search',  icon: '⊕',  sublabel: 'ChromaDB',                  x: 328, y: 68,  w: 92,  h: 26, color: '#2563eb', group: 'retrieve' },
-  { id: 'graph',    label: 'Graph Augment',  icon: '⬡',  sublabel: 'Neo4j',                     x: 328, y: 140, w: 92,  h: 26, color: '#059669', group: 'retrieve-graph' },
-  { id: 'rerank',   label: 'Reranker',       icon: '⇅',  sublabel: 'BGE / Cohere',              x: 444, y: 101, w: 82,  h: 26, color: '#d97706', group: 'retrieve' },
-  { id: 'context',  label: 'Context Builder',icon: '⊞',                                         x: 552, y: 68,  w: 94,  h: 26, color: '#dc2626', group: 'full' },
-  { id: 'llm',      label: 'LLM Generation', icon: '◆',                                         x: 552, y: 140, w: 94,  h: 26, color: '#6d28d9', group: 'full' },
-  { id: 'chunks',   label: 'Chunks Out',     icon: '▣',  sublabel: '← preview result',          x: 672, y: 101, w: 84,  h: 26, color: '#f59e0b', group: 'retrieve' },
+  { id: 'longmem',  label: 'Long Memory',    icon: '⊙',  sublabel: 'PG · profile',             x: 96,  y: 182, w: 94,  h: 26, color: '#0891b2', group: 'full' },
+  { id: 'graphseed',label: 'Query Seed',     icon: '◌',  sublabel: 'LLM → graph seeds',         x: 212, y: 105, w: 92,  h: 26, color: '#0ea5e9', group: 'retrieve-graph' },
+  { id: 'qintel',   label: 'Query Intel · LLM', icon: '✦',  sublabel: 'rewrite/HyDE',              x: 212, y: 51,  w: 98,  h: 26, color: '#8b5cf6', group: 'full' },
+  { id: 'vector',   label: 'Vector Search',  icon: '⊕',  sublabel: 'ChromaDB',                  x: 328, y: 51,  w: 92,  h: 26, color: '#2563eb', group: 'retrieve' },
+  { id: 'graph',    label: 'Graph Augment',  icon: '⬡',  sublabel: 'Neo4j',                     x: 328, y: 180, w: 92,  h: 26, color: '#059669', group: 'retrieve-graph' },
+  { id: 'rerank',   label: 'Reranker',       icon: '⇅',  sublabel: 'LLM / Typhoon',             x: 444, y: 103, w: 82,  h: 26, color: '#d97706', group: 'retrieve' },
+  { id: 'context',  label: 'Context Builder',icon: '⊞',                                         x: 552, y: 51,  w: 94,  h: 26, color: '#dc2626', group: 'full' },
+  { id: 'answer',   label: 'Context Answer', icon: '◆',                                         x: 552, y: 155, w: 94,  h: 26, color: '#6d28d9', group: 'full' },
+  { id: 'chunks',   label: 'Chunks Out',     icon: '▣',  sublabel: '← preview result',          x: 672, y: 103, w: 84,  h: 26, color: '#f59e0b', group: 'retrieve' },
 ]
 
 type EdgeType = 'full' | 'retrieve' | 'retrieve-graph'
@@ -278,13 +311,14 @@ const PIPELINE_EDGES: [string, string, EdgeType][] = [
   ['shortmem', 'qintel',   'full'],
   ['longmem',  'qintel',   'full'],
   ['qintel',   'vector',   'full'],
-  ['qintel',   'graph',    'full'],
+  ['qintel',   'graphseed','full'],
+  ['query',    'graphseed','retrieve-graph'],
+  ['graphseed','graph',    'retrieve-graph'],
   ['rerank',   'context',  'full'],
-  ['context',  'llm',      'full'],
-  ['llm',      'chunks',   'full'],
+  ['context',  'answer',   'full'],
+  ['answer',   'chunks',   'full'],
   // Retrieve-only path (ACTIVE in preview — shortcuts directly to vector/graph)
   ['query',  'vector', 'retrieve'],
-  ['query',  'graph',  'retrieve-graph'],
   ['vector', 'rerank', 'retrieve'],
   ['graph',  'rerank', 'retrieve-graph'],
   ['rerank', 'chunks', 'retrieve'],
@@ -298,11 +332,12 @@ const NODE_PURPOSE: Record<string, string> = {
   shortmem: 'Loads recent conversation turns for this user',
   longmem:  'Loads long-term user knowledge from PostgreSQL',
   qintel:   'Rewrites query and/or generates HyDE document',
+  graphseed:'Extracts graph seed entities from the query',
   vector:   'Cosine-similarity search in ChromaDB',
   graph:    'Traverses Neo4j entity graph for related context',
   rerank:   'Cross-encoder re-scores candidate chunks',
-  context:  'Assembles final LLM context window',
-  llm:      'Generates grounded answer from context',
+  context:  'Assembles the final context window',
+  answer:   'Returns the final context-only answer text',
   chunks:   'Final ranked chunks — retrieval output',
 }
 
@@ -357,6 +392,20 @@ function ConfigBlock({ items }: { items: { env: string; value: string }[] }) {
       </div>
     </div>
   )
+}
+
+function normalizeSeedNames(names: string[]): string[] {
+  const seen = new Set<string>()
+  const cleaned: string[] = []
+  for (const name of names) {
+    const seed = (name || '').trim()
+    if (!seed) continue
+    const key = seed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    cleaned.push(seed)
+  }
+  return cleaned
 }
 
 function renderNodeBody(
@@ -462,6 +511,7 @@ function renderNodeBody(
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
+          <Pill color="purple">LLM-powered</Pill>
           <Pill color={rewrote ? 'violet' : 'gray'}>↺ Rewrite {rewrote ? '✓' : '✗'}</Pill>
           <Pill color={hyde ? 'pink' : 'gray'}>HyDE {hyde ? '✓' : '✗'}</Pill>
           {(subQ ?? 0) > 0 && <Pill color="blue">{subQ} sub-queries</Pill>}
@@ -477,8 +527,12 @@ function renderNodeBody(
         )}
         <StatGrid items={[{ label: 'Latency', value: ms(timing) }]} />
         {cfg && <ConfigBlock items={[
-          { env: 'UTILITY_LLM_PROVIDER', value: cfg.utilityLlmProvider },
-          { env: 'UTILITY_LLM_MODEL', value: cfg.utilityLlmModel },
+          { env: 'QUERY_REWRITE_LLM_PROVIDER', value: cfg.queryRewriteLlmProvider },
+          { env: 'QUERY_REWRITE_LLM_MODEL', value: cfg.queryRewriteLlmModel },
+          { env: 'HYDE_LLM_PROVIDER', value: cfg.hydeLlmProvider },
+          { env: 'HYDE_LLM_MODEL', value: cfg.hydeLlmModel },
+          { env: 'QUERY_DECOMPOSER_LLM_PROVIDER', value: cfg.queryDecomposerLlmProvider },
+          { env: 'QUERY_DECOMPOSER_LLM_MODEL', value: cfg.queryDecomposerLlmModel },
         ]} />}
       </div>
     )
@@ -510,10 +564,55 @@ function renderNodeBody(
     )
   }
 
+  if (nodeId === 'graphseed') {
+    if (!isActive) return <p className="text-gray-500 text-[11px]">Graph seed extraction skipped — enable <span className="text-cyan-400">Graph</span> toggle to seed Neo4j augmentation.</p>
+    const seedNames = normalizeSeedNames((meta?.seed_names as string[] | undefined) ?? extras?.graphSeedNames ?? [])
+    const seedSource = (meta?.seed_source as string | undefined) ?? extras?.graphSeedSource ?? 'empty'
+    const seedStrategy = (meta?.seed_strategy as string | undefined) ?? extras?.graphSeedStrategy ?? 'none'
+    const seedSourceLabel = seedSource === 'empty' ? '—' : seedSource
+    const seedStrategyLabel = seedStrategy === 'none' ? '—' : seedStrategy
+    const seedCount = (meta?.seed_count as number | undefined) ?? seedNames.length
+    return (
+      <div className="space-y-2">
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-bold text-white">{seedCount}</span>
+          <span className="text-gray-500 text-sm">seed{seedCount === 1 ? '' : 's'}</span>
+        </div>
+        {seedNames.length > 0 && (
+          <div className="bg-gray-800 rounded-lg px-2.5 py-2">
+            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Seeds</div>
+            <div className="flex flex-wrap gap-1">
+              {seedNames.slice(0, 3).map(seed => (
+                <span key={seed} className="text-[9px] bg-cyan-900/30 text-cyan-300 px-1.5 py-0.5 rounded-full">{seed}</span>
+              ))}
+              {seedNames.length > 3 && <span className="text-[9px] text-gray-600">+{seedNames.length - 3} more</span>}
+            </div>
+          </div>
+        )}
+        <StatGrid items={[
+          { label: 'Seed source', value: seedSourceLabel },
+          { label: 'Seed mode', value: seedStrategyLabel },
+        ]} />
+        <StatGrid items={[{ label: 'Latency', value: ms(timing) }, { label: 'Model', value: cfg?.querySeedLlmModel ?? 'LLM' }]} />
+        {cfg && <ConfigBlock items={[
+          { env: 'QUERY_SEED_LLM_PROVIDER', value: cfg.querySeedLlmProvider },
+          { env: 'QUERY_SEED_LLM_MODEL', value: cfg.querySeedLlmModel },
+          { env: 'GRAPH_QUERY_SEED_MAX_TOKENS', value: cfg.graphQuerySeedMaxTokens },
+          { env: 'GRAPH_QUERY_SEED_SYSTEM_PROMPT', value: cfg.graphQuerySeedSystemPrompt ? 'custom' : 'default' },
+        ]} />}
+      </div>
+    )
+  }
+
   if (nodeId === 'graph') {
     if (!isActive) return <p className="text-gray-500 text-[11px]">Graph disabled — enable <span className="text-emerald-400">Graph</span> toggle to use Neo4j augmentation.</p>
     const count = meta?.entity_count as number | undefined
-    const seedNames = (meta?.seed_names as string[] | undefined) ?? extras?.graphSeedNames ?? []
+    const seedNames = normalizeSeedNames((meta?.seed_names as string[] | undefined) ?? extras?.graphSeedNames ?? [])
+    const seedSource = (meta?.seed_source as string | undefined) ?? extras?.graphSeedSource ?? 'empty'
+    const seedStrategy = (meta?.seed_strategy as string | undefined) ?? extras?.graphSeedStrategy ?? 'none'
+    const seedSourceLabel = seedSource === 'empty' ? '—' : seedSource
+    const seedStrategyLabel = seedStrategy === 'none' ? '—' : seedStrategy
+    const graphSummaryTexts = (extras?.graphSummaryTexts ?? []).map(t => t.trim()).filter(Boolean)
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
@@ -527,22 +626,33 @@ function renderNodeBody(
         )}
         {seedNames.length > 0 && (
           <div className="bg-gray-800 rounded-lg px-2.5 py-2">
-            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Graph seeds</div>
+            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Seeds</div>
             <div className="flex flex-wrap gap-1">
-              {seedNames.slice(0, 4).map(seed => (
+              {seedNames.slice(0, 3).map(seed => (
                 <span key={seed} className="text-[9px] bg-cyan-900/30 text-cyan-300 px-1.5 py-0.5 rounded-full">{seed}</span>
               ))}
-              {seedNames.length > 4 && <span className="text-[9px] text-gray-600">+{seedNames.length - 4} more</span>}
+              {seedNames.length > 3 && <span className="text-[9px] text-gray-600">+{seedNames.length - 3} more</span>}
             </div>
           </div>
         )}
+        <StatGrid items={[
+          { label: 'Seed source', value: seedSourceLabel },
+          { label: 'Seed mode', value: seedStrategyLabel },
+        ]} />
         <StatGrid items={[{ label: 'Latency', value: ms(timing) }, { label: 'Store', value: 'Neo4j' }]} />
-        {cfg && <ConfigBlock items={[
-          { env: 'ENABLE_GRAPH',            value: cfg.enableGraph },
-          { env: 'GRAPH_EXTRACTOR_BACKEND', value: cfg.graphExtractorBackend },
-          { env: 'GRAPH_LLM_PROVIDER',      value: cfg.graphLlmProvider },
-          { env: 'GRAPH_LLM_MODEL',         value: cfg.graphLlmModel },
-        ]} />}
+        {graphSummaryTexts.length > 0 && (
+          <div className="bg-gray-800 rounded-lg px-2.5 py-2">
+            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Graph Summary</div>
+            <div className="space-y-1">
+              {graphSummaryTexts.slice(0, 3).map((line, idx) => (
+                <div key={`${line}-${idx}`} className="text-[10px] text-gray-300 leading-relaxed line-clamp-2">
+                  {line}
+                </div>
+              ))}
+              {graphSummaryTexts.length > 3 && <div className="text-[9px] text-gray-600">+{graphSummaryTexts.length - 3} more</div>}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -555,6 +665,9 @@ function renderNodeBody(
     const pct = score != null ? score * 100 : null
     const label = score == null ? '' : score >= 0.9 ? 'EXCELLENT' : score >= 0.7 ? 'GOOD' : score >= 0.5 ? 'FAIR' : 'LOW'
     const labelColor = score == null ? 'text-gray-500' : score >= 0.9 ? 'text-green-400' : score >= 0.7 ? 'text-amber-400' : score >= 0.5 ? 'text-orange-400' : 'text-red-400'
+    const rerankerLabel = cfg?.rerankerBackend === 'llm'
+      ? `LLM · ${cfg?.rerankerLlmModel || 'Typhoon'}`
+      : (cfg?.rerankerBackend || 'noop')
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
@@ -570,6 +683,11 @@ function renderNodeBody(
           <p className="text-[10px] text-red-400">Low top score — retrieved chunks may not be relevant to this query.</p>
         )}
         {cfg && <ConfigBlock items={[{ env: 'RERANKER_BACKEND', value: cfg.rerankerBackend }]} />}
+        {cfg && cfg.rerankerBackend === 'llm' && <ConfigBlock items={[
+          { env: 'RERANKER_LABEL', value: rerankerLabel },
+          { env: 'LLM_RERANKER_URL', value: cfg.rerankerLlmUrl || '—' },
+          { env: 'LLM_RERANKER_MODEL', value: cfg.rerankerLlmModel || '—' },
+        ]} />}
       </div>
     )
   }
@@ -589,6 +707,9 @@ function renderNodeBody(
         {truncated && <p className="text-[10px] text-amber-400">Context was truncated to fit the LLM token budget.</p>}
         {cfg && <ConfigBlock items={[
           { env: 'COMPRESSOR',                    value: cfg.compressor },
+          { env: 'COMPRESSION_LLM_PROVIDER',       value: cfg.compressionLlmProvider },
+          { env: 'COMPRESSION_LLM_MODEL',          value: cfg.compressionLlmModel },
+          { env: 'COMPRESSION_LLM_SYSTEM_PROMPT',  value: cfg.compressionLlmSystemPrompt ? 'custom' : 'default' },
           { env: 'CONTEXT_DEDUP_OVERLAP_THRESHOLD', value: cfg.contextDedupOverlapThreshold },
           { env: 'CONTEXT_COMPRESSION_THRESHOLD',   value: cfg.contextCompressionThreshold },
         ]} />}
@@ -596,25 +717,17 @@ function renderNodeBody(
     )
   }
 
-  if (nodeId === 'llm') {
-    if (!isActive) return <p className="text-gray-500 text-[11px]">LLM not called — use Generate mode to produce an answer.</p>
+  if (nodeId === 'answer') {
+    if (!isActive) return <p className="text-gray-500 text-[11px]">Answer assembly skipped — retrieve-only output is disabled.</p>
     const ansLen = meta?.answer_len as number | undefined
-    const tools = meta?.from_tools as unknown[] | undefined
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
           <span className="text-3xl font-bold text-white">{ansLen ?? '—'}</span>
-          <span className="text-gray-500 text-sm">chars generated</span>
+          <span className="text-gray-500 text-sm">chars returned</span>
         </div>
-        <StatGrid items={[
-          { label: 'Latency', value: ms(timing) },
-          { label: 'ReAct calls', value: tools?.length ?? 0 },
-        ]} />
-        {tools && tools.length > 0 && <p className="text-[10px] text-blue-400">LLM made {tools.length} tool call{tools.length !== 1 ? 's' : ''} (ReAct loop).</p>}
-        {cfg && <ConfigBlock items={[
-          { env: 'GENERATION_LLM_PROVIDER', value: cfg.generationLlmProvider },
-          { env: 'GENERATION_LLM_MODEL', value: cfg.generationLlmModel },
-        ]} />}
+        <StatGrid items={[{ label: 'Latency', value: ms(timing) }]} />
+        <p className="text-[10px] text-gray-500">This is the final context-only output, not a separate generative answer stage.</p>
       </div>
     )
   }
@@ -647,15 +760,15 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
   const nodeActive = (n: PNode): boolean => {
     if (status === 'idle') return false
     if (status === 'loading') {
-      // context/llm show as "pending" (waiting for LLM), not "active"
-      if (mode === 'full' && (n.id === 'context' || n.id === 'llm')) return false
+      // context/answer show as "pending" (waiting for output assembly), not "active"
+      if (mode === 'full' && (n.id === 'context' || n.id === 'answer')) return false
       return n.group !== 'full' || mode === 'full'
     }
     return activeNodes.has(n.id)
   }
 
   const nodePending = (n: PNode): boolean =>
-    status === 'loading' && mode === 'full' && (n.id === 'context' || n.id === 'llm')
+    status === 'loading' && mode === 'full' && (n.id === 'context' || n.id === 'answer')
 
   const edgeActive = (a: string, b: string, t: EdgeType): boolean => {
     if (status !== 'done') return false
@@ -684,6 +797,8 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
     if (meta?.result_count !== undefined) parts.push(`${meta.result_count} results`)
     if (meta?.entity_count !== undefined) parts.push(`${meta.entity_count} entities`)
     if (meta?.seed_count !== undefined) parts.push(`${meta.seed_count} seeds`)
+    if (meta?.seed_source !== undefined) parts.push(`seed source: ${meta.seed_source}`)
+    if (meta?.seed_strategy !== undefined) parts.push(`seed mode: ${meta.seed_strategy}`)
     if (meta?.top_score !== undefined) parts.push(`score: ${(meta.top_score as number).toFixed(3)}`)
     if (meta?.entry_count !== undefined) parts.push(`${meta.entry_count} entries`)
     if (meta?.rewritten) parts.push('rewritten ✓')
@@ -694,13 +809,24 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
   const bez = (a: string, b: string) => {
     const na = nm[a], nb = nm[b]
     if (!na || !nb) return ''
+    // Same-column nodes: route vertically (bottom of src → top of dst)
+    if (Math.abs(na.x - nb.x) < 20) {
+      const bx = na.x + na.w / 2
+      const by1 = na.y + na.h, by2 = nb.y
+      const midy = (by1 + by2) / 2
+      return `M${bx},${by1} C${bx},${midy} ${bx},${midy} ${bx},${by2}`
+    }
     const x1 = na.x + na.w, y1 = na.y + na.h / 2
     const x2 = nb.x,         y2 = nb.y + nb.h / 2
     const mx = (x1 + x2) / 2
-    return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`
+    const dy = y2 - y1
+    const offsetFactor = Math.abs(dy) < 20 ? 0.15 : 0.08
+    const cy1 = y1 + dy * offsetFactor
+    const cy2 = y2 - dy * offsetFactor
+    return `M${x1},${y1} C${mx},${cy1} ${mx},${cy2} ${x2},${y2}`
   }
 
-  const VW = 762, VH = 228
+  const VW = 762, VH = 260
 
   return (
     <div>
@@ -724,10 +850,10 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
         </defs>
 
         {/* Section backgrounds */}
-        <rect x={92}  y={24} width={104} height={180} rx={4} fill="#0f172a" opacity={0.6} />
-        <rect x={208} y={24} width={108} height={180} rx={4} fill="#0f172a" opacity={0.4} />
-        <rect x={324} y={24} width={108} height={180} rx={4} fill="#0f172a" opacity={0.2} />
-        <rect x={548} y={24} width={104} height={180} rx={4} fill="#0f172a" opacity={0.4} />
+        <rect x={92}  y={8} width={104} height={212} rx={4} fill="#0f172a" opacity={0.6} />
+        <rect x={208} y={32} width={108} height={172} rx={4} fill="#0f172a" opacity={0.4} />
+        <rect x={324} y={32} width={108} height={164} rx={4} fill="#0f172a" opacity={0.2} />
+        <rect x={548} y={32} width={104} height={164} rx={4} fill="#0f172a" opacity={0.4} />
 
         {/* Section labels */}
         {[
@@ -789,7 +915,7 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
                 strokeDasharray={isFullNode && !on && !pending ? '3 2' : undefined}
                 filter={on ? 'url(#pg-glow)' : undefined}
               />
-              {/* Pending pulse overlay for context/llm waiting for LLM */}
+              {/* Pending pulse overlay for context/answer waiting for output assembly */}
               {pending && (
                 <rect width={node.w} height={node.h} rx={5} fill="none"
                   stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 2">
@@ -851,7 +977,7 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
         )}
         {status === 'done' && !pipeline.cacheHit && mode === 'retrieve' && (
           <text x={VW / 2} y={VH - 2} textAnchor="middle" fill="#d97706" fontSize={8}>
-            inspect-only · Cache + Memory + Q.Intel + LLM not called (use Generate mode for those)
+            inspect-only · Cache + Memory + Q.Intel + answer assembly not called (use Answer mode for those)
           </text>
         )}
         {status === 'done' && !pipeline.cacheHit && mode === 'full' && (
@@ -871,7 +997,7 @@ function PipelineDiagram({ pipeline, systemConfig }: { pipeline: PipelineData; s
         const node = nm[selectedId]
         if (!node) return null
         const on = activeNodes.has(selectedId)
-        const pending = status === 'loading' && mode === 'full' && (selectedId === 'context' || selectedId === 'llm')
+        const pending = status === 'loading' && mode === 'full' && (selectedId === 'context' || selectedId === 'answer')
         const timing = nodeTimings.get(selectedId)
         const meta = nodeMeta.get(selectedId)
         const vectorMeta = selectedId === 'chunks' ? nodeMeta.get('rerank') ?? nodeMeta.get('vector') : undefined
@@ -1461,6 +1587,7 @@ export default function KnowledgePreviewUI() {
     // Synthesize mock stage data
     const mockStages: StageTimingInfo[] = [
       { stage: 'embed', fired: true, latency_ms: 12.3 },
+      { stage: 'graph_seed', fired: true, latency_ms: 18.6, meta: { seed_count: mock.graph_seed_names?.length ?? 0, seed_source: 'llm', seed_strategy: 'llm-first' } },
       { stage: 'vector', fired: true, latency_ms: 45.1, meta: { result_count: mock.total_chunks_before_rerank } },
       ...(withGraph ? [{ stage: 'graph', fired: true, latency_ms: 38.7, meta: { entity_count: mock.graph_entities.length } }] : []),
       { stage: 'rerank', fired: true, latency_ms: 28.4, meta: { result_count: mock.chunks.length, top_score: mock.chunks[0]?.score ?? 0 } },
@@ -1515,6 +1642,9 @@ export default function KnowledgePreviewUI() {
         topK: retrieveTopK,
         topN: retrieveTopN,
         graphSeedNames: data.graph_seed_names ?? [],
+        graphSeedSource: data.graph_seed_source ?? 'empty',
+        graphSeedStrategy: data.graph_seed_strategy ?? 'none',
+        graphSummaryTexts: data.graph_summary_texts ?? [],
       }))
     } catch {
       setRetrieveError('Failed to connect to RAG service')
@@ -1563,6 +1693,9 @@ export default function KnowledgePreviewUI() {
         topK: retrieveTopK,
         topN: retrieveTopN,
         graphSeedNames: data.graph_seed_names ?? [],
+        graphSeedSource: data.graph_seed_source ?? 'empty',
+        graphSeedStrategy: data.graph_seed_strategy ?? 'none',
+        graphSummaryTexts: data.graph_summary_texts ?? [],
       }))
     } catch {
       setRetrieveError('Failed to connect to RAG service')
@@ -1733,9 +1866,9 @@ export default function KnowledgePreviewUI() {
                   <button
                     onClick={() => setPipelineMode('full')}
                     className={`px-3 py-1.5 transition-colors border-l border-gray-700 ${pipelineMode === 'full' ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
-                    title="Generative pipeline — retrieval + LLM answer (~30–60s)"
+                    title="Retrieve-only pipeline — retrieval + context answer (~30–60s)"
                   >
-                    ⚡ Generate
+                    ⚡ Answer
                   </button>
                 </div>
                 {/* Run button */}
@@ -1745,7 +1878,7 @@ export default function KnowledgePreviewUI() {
                   className={`shrink-0 px-5 py-1.5 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors self-end ${pipelineMode === 'full' ? 'bg-green-700 hover:bg-green-600' : 'bg-purple-600 hover:bg-purple-500'}`}
                 >
                   {(retrieveLoading || fullQueryLoading)
-                    ? (pipelineMode === 'full' ? 'Generating…' : 'Searching…')
+                    ? (pipelineMode === 'full' ? 'Answering…' : 'Searching…')
                     : 'Run'}
                 </button>
               </div>
@@ -1842,7 +1975,7 @@ export default function KnowledgePreviewUI() {
                   <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Pipeline</span>
                   {pipeline.status === 'done' && (
                     <span className={`text-[10px] ${pipeline.mode === 'full' ? 'text-green-400' : 'text-amber-500'}`}>
-                      {pipeline.mode === 'full' ? 'generative pipeline — LLM included' : `${pipeline.activeNodes.size} stages fired`}
+                      {pipeline.mode === 'full' ? 'retrieve-only pipeline — context answer included' : `${pipeline.activeNodes.size} stages fired`}
                     </span>
                   )}
                 </div>
@@ -1892,11 +2025,11 @@ export default function KnowledgePreviewUI() {
                     </div>
                   )}
 
-                  {/* LLM Answer — only when not from cache */}
+                  {/* Context answer — only when not from cache */}
                   {fullQueryResult?.answer && !fullQueryResult.from_cache && (
                     <div className="shrink-0 bg-gray-900 border border-green-800/40 rounded-xl p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-[10px] font-semibold text-green-500 uppercase tracking-wider">◆ LLM Answer</h3>
+                        <h3 className="text-[10px] font-semibold text-green-500 uppercase tracking-wider">◆ Context Answer</h3>
                         {fullQueryResult.low_confidence && <span className="text-[10px] text-orange-400">⚠ low confidence</span>}
                       </div>
                       <ExpandableText text={fullQueryResult.answer} />
@@ -1920,33 +2053,59 @@ export default function KnowledgePreviewUI() {
                   {(() => {
                     const hasTimings = !!(fullQueryResult && !fullQueryResult.from_cache)
                     const graphEntities = retrieveResult?.graph_entities ?? fullQueryResult?.graph_entities ?? []
-                    const graphSeedNames = retrieveResult?.graph_seed_names ?? fullQueryResult?.graph_seed_names ?? []
+                    const graphSummaryTexts = retrieveResult?.graph_summary_texts ?? fullQueryResult?.graph_summary_texts ?? []
+                    const graphSeedNames = normalizeSeedNames(retrieveResult?.graph_seed_names ?? fullQueryResult?.graph_seed_names ?? [])
+                    const graphSeedSource = retrieveResult?.graph_seed_source ?? fullQueryResult?.graph_seed_source ?? ''
+                    const graphSeedStrategy = retrieveResult?.graph_seed_strategy ?? fullQueryResult?.graph_seed_strategy ?? ''
+                    const graphSeedSourceLabel = graphSeedSource && graphSeedSource !== 'empty' ? graphSeedSource : ''
+                    const graphSeedStrategyLabel = graphSeedStrategy && graphSeedStrategy !== 'none' ? graphSeedStrategy : ''
                     const hasGraphEntities = graphEntities.length > 0
+                    const hasGraphSummary = graphSummaryTexts.length > 0
                     const hasGraphSeeds = graphSeedNames.length > 0
                     const hasMemory = (retrieveResult?.memory_context_chars ?? 0) > 0 || (fullQueryResult?.memory_context_chars ?? 0) > 0
                     const hasRewrite = !!(retrieveResult?.rewritten_query || fullQueryResult?.rewritten_query)
                     const hasHyde = !!(retrieveResult?.hyde_used || fullQueryResult?.hyde_used)
-                    if (!hasTimings && !hasGraphEntities && !hasGraphSeeds && !hasMemory && !hasRewrite && !hasHyde) return null
+                    if (!hasTimings && !hasGraphEntities && !hasGraphSummary && !hasGraphSeeds && !hasMemory && !hasRewrite && !hasHyde && !graphSeedSourceLabel && !graphSeedStrategyLabel) return null
                     return (
                       <div className="shrink-0 bg-gray-900 border border-gray-800 rounded-xl p-3">
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
                           {hasTimings && <>
                             <span><span className="text-gray-300 font-medium">{fullQueryResult!.retrieval_latency_ms.toFixed(0)}</span> ms retrieve</span>
-                            <span><span className="text-green-400 font-medium">{fullQueryResult!.generation_latency_ms.toFixed(0)}</span> ms generate</span>
+                            <span><span className="text-green-400 font-medium">{fullQueryResult!.answer_latency_ms.toFixed(0)}</span> ms answer</span>
                             <span><span className="text-gray-300 font-medium">{fullQueryResult!.total_latency_ms.toFixed(0)}</span> ms total</span>
                             <span><span className={`font-medium ${fullQueryResult!.grounding_score > 0.7 ? 'text-green-400' : fullQueryResult!.grounding_score > 0.4 ? 'text-amber-400' : 'text-red-400'}`}>{(fullQueryResult!.grounding_score * 100).toFixed(0)}%</span> grounded</span>
                           </>}
                           {hasGraphEntities && (
                             <span><span className="text-emerald-400 font-medium">{graphEntities.length}</span> graph entities</span>
                           )}
+                          {hasGraphSummary && (
+                            <span><span className="text-emerald-400 font-medium">{graphSummaryTexts.length}</span> graph summary line{graphSummaryTexts.length === 1 ? '' : 's'}</span>
+                          )}
                           {hasGraphSeeds && (
-                            <span><span className="text-cyan-400 font-medium">{graphSeedNames.length}</span> graph seeds</span>
+                            <span><span className="text-cyan-400 font-medium">{graphSeedNames.length}</span> seed{graphSeedNames.length === 1 ? '' : 's'}</span>
+                          )}
+                          {graphSeedStrategyLabel && (
+                            <span><span className="text-emerald-400 font-medium">{graphSeedStrategyLabel}</span> seed mode</span>
                           )}
                           {hasMemory && (
                             <span><span className="text-cyan-400 font-medium">{(retrieveResult?.memory_context_chars ?? fullQueryResult?.memory_context_chars ?? 0).toLocaleString()}</span> memory chars</span>
                           )}
                           {hasGraphSeeds && (
-                            <span className="w-full text-cyan-500 truncate">seeded by: {graphSeedNames.slice(0, 4).join(', ')}{graphSeedNames.length > 4 ? ` … +${graphSeedNames.length - 4}` : ''}</span>
+                            <span className="w-full text-cyan-500 truncate">seeds: {graphSeedNames.slice(0, 3).join(', ')}{graphSeedNames.length > 3 ? ` … +${graphSeedNames.length - 3}` : ''}</span>
+                          )}
+                          {hasGraphSummary && (
+                            <div className="w-full rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-2.5 py-2 text-[10px] text-emerald-200">
+                              <div className="uppercase tracking-wider text-[9px] text-emerald-500 mb-1">Graph Summary</div>
+                              <div className="space-y-1">
+                                {graphSummaryTexts.slice(0, 3).map((line, idx) => (
+                                  <div key={`${line}-${idx}`} className="leading-relaxed line-clamp-2">{line}</div>
+                                ))}
+                                {graphSummaryTexts.length > 3 && <div className="text-emerald-500">+{graphSummaryTexts.length - 3} more</div>}
+                              </div>
+                            </div>
+                          )}
+                          {graphSeedSourceLabel && (
+                            <span className="w-full text-emerald-500 truncate">graph seed source: {graphSeedSourceLabel}</span>
                           )}
                           {hasRewrite && (
                             <span className="w-full text-cyan-500 truncate">↺ {retrieveResult?.rewritten_query ?? fullQueryResult?.rewritten_query}</span>

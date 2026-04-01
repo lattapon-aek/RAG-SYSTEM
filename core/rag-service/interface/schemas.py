@@ -17,7 +17,6 @@ class QueryRequest(BaseModel):
     use_rewrite: bool = False
     use_decompose: bool = False
     use_graph: bool = True
-    use_tools: bool = False
 
     @field_validator("query")
     @classmethod
@@ -52,13 +51,16 @@ class QueryResponse(BaseModel):
     answer: str
     citations: List[CitationResponse]
     graph_entities: List[Dict[str, Any]] = []
+    graph_summary_texts: List[str] = []
     graph_seed_names: List[str] = []
+    graph_seed_source: str = "empty"
+    graph_seed_strategy: str = "none"
     rewritten_query: Optional[str] = None
     hyde_used: bool = False
     sub_queries: List[str] = []
     from_cache: bool = False
     retrieval_latency_ms: float = 0.0
-    generation_latency_ms: float = 0.0
+    answer_latency_ms: float = 0.0
     total_latency_ms: float = 0.0
     grounding_score: float = 1.0
     low_confidence: bool = False
@@ -199,7 +201,10 @@ class RetrieveResponse(BaseModel):
     query: str
     chunks: List[RetrieveChunk]
     graph_entities: List[Dict[str, Any]] = []
+    graph_summary_texts: List[str] = []
     graph_seed_names: List[str] = []
+    graph_seed_source: str = "empty"
+    graph_seed_strategy: str = "none"
     retrieval_latency_ms: float = 0.0
     total_chunks_before_rerank: int = 0
     # --- stage metadata (new) ---
@@ -220,7 +225,7 @@ class RetrieveResponse(BaseModel):
 class MetricsSummaryResponse(BaseModel):
     query_volume_total: int = 0
     avg_retrieval_latency_ms: float = 0.0
-    avg_generation_latency_ms: float = 0.0
+    avg_answer_latency_ms: float = 0.0
     avg_total_latency_ms: float = 0.0
     error_rate: float = 0.0
     cache_hit_rate: float = 0.0

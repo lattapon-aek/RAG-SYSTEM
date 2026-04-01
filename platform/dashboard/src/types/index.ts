@@ -7,7 +7,7 @@ export interface CircuitBreakerStatus {
 export interface MetricsSummary {
   query_volume_total: number
   avg_retrieval_latency_ms: number
-  avg_generation_latency_ms: number
+  avg_answer_latency_ms: number
   avg_total_latency_ms: number
   error_rate: number
   cache_hit_rate: number

@@ -227,8 +227,11 @@ def _make_use_case(
     vs = vector_store or AsyncMock()
     vs.search = AsyncMock(return_value=[])
 
-    llm_svc = llm or AsyncMock()
-    llm_svc.generate = AsyncMock(return_value="mocked answer")
+    if llm is None:
+        llm_svc = AsyncMock()
+        llm_svc.generate = AsyncMock(return_value="mocked answer")
+    else:
+        llm_svc = llm
 
     dr = doc_repo or AsyncMock()
     dr.list_all = AsyncMock(return_value=[])
@@ -238,8 +241,12 @@ def _make_use_case(
     rr = reranker or AsyncMock()
     rr.rerank = AsyncMock(return_value=[])
 
-    from application.context_builder import ContextBuilder
     from application.context_compressor import NoOpCompressor
+
+    class _NoOpContextBuilder:
+        async def build(self, query, chunks, max_tokens=4096):
+            from domain.entities import BuiltContext
+            return BuiltContext(chunks=chunks, total_tokens=0)
 
     return QueryUseCase(
         embedding_service=embedding_svc,
@@ -247,7 +254,7 @@ def _make_use_case(
         llm_service=llm_svc,
         document_repository=dr,
         reranker=rr,
-        context_builder=ContextBuilder(),
+        context_builder=_NoOpContextBuilder(),
         context_compressor=NoOpCompressor(),
         semantic_cache=cache,
     )
@@ -438,6 +445,49 @@ async def test_document_delete_cache_invalidation():
 
 
 @pytest.mark.asyncio
+async def test_query_use_case_keeps_graph_summary_and_no_low_confidence_note():
+    cache_mock = AsyncMock()
+    cache_mock.get = AsyncMock(return_value=None)
+    cache_mock.set = AsyncMock()
+
+    graph_mock = AsyncMock()
+    graph_mock.query_related_entities = AsyncMock(return_value={
+        "entities": [
+            {"id": "p1", "name": "พิมวา", "type": "PERSON"},
+        ],
+        "relations": [
+            {"source": "พิมวา", "target": "ทีม ABAP", "relation_type": "MEMBER_OF"},
+        ],
+        "context_text": "### Graph Summary\nEntities:\n- PERSON: พิมวา\nRelationships:\n- พิมวา is a member of: ทีม ABAP",
+    })
+
+    vs_mock = AsyncMock()
+    vs_mock.search = AsyncMock(return_value=[
+        _make_chunk("c1", "พิมวาอยู่ในทีม ABAP", score=0.95, document_id="doc-1")
+    ])
+
+    reranker = AsyncMock()
+    reranker.rerank = AsyncMock(return_value=[
+        _make_chunk("c1", "พิมวาอยู่ในทีม ABAP", score=0.95, document_id="doc-1")
+    ])
+
+    uc = _make_use_case(vector_store=vs_mock, cache=cache_mock, reranker=reranker)
+    uc._graph = graph_mock
+
+    result = await uc.execute(UCQueryRequest(
+        query="พิมวาทำงานกับใคร",
+        use_graph=True,
+        use_cache=True,
+    ))
+
+    assert "Graph Summary" in result.answer
+    assert "[Note:" not in result.answer
+    assert result.graph_summary_texts == [
+        "### Graph Summary\nEntities:\n- PERSON: พิมวา\nRelationships:\n- พิมวา is a member of: ทีม ABAP"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_query_use_case_passes_namespace_to_cache_and_graph():
     """Cache lookup and graph retrieval must be scoped to the request namespace."""
     cache_mock = AsyncMock()
@@ -523,6 +573,103 @@ async def test_query_use_case_extracts_team_seed_names_for_graph():
     graph_mock.query_related_entities.assert_awaited_once_with(
         "ทีม ABAP มีใครบ้าง", top_k=req.top_k, namespace="tenant-a", entity_names=["ABAP"]
     )
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_llm_seed_extraction_prefers_person_name():
+    """LLM seed extraction should pull the person name out of Thai no-space queries."""
+    class _SeedLLM:
+        async def generate(self, prompt, system_prompt=None, max_tokens=128):
+            return '{"seeds":["เอก"]}'
+
+    llm = _SeedLLM()
+    uc = _make_use_case(llm=llm)
+    seeds = await uc.resolve_graph_seed_names("เอกเป็นใคร")
+
+    assert seeds == ["เอก"]
+    assert uc._last_graph_seed_source == "llm"
+    assert uc._last_graph_seed_strategy == "llm-first"
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_llm_seed_extraction_preserves_multi_entity_queries():
+    """Multi-entity queries should keep multiple canonical seeds instead of collapsing to one."""
+    class _SeedLLM:
+        async def generate(self, prompt, system_prompt=None, max_tokens=128):
+            return '{"seeds":["เอก","โจ้"]}'
+
+    llm = _SeedLLM()
+    uc = _make_use_case(llm=llm)
+    seeds = await uc.resolve_graph_seed_names("เอกกับโจ้ทำงานกับใคร")
+
+    assert seeds == ["เอก", "โจ้"]
+    assert uc._last_graph_seed_source == "llm"
+    assert uc._last_graph_seed_strategy == "llm-first"
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_fallback_seed_extraction_handles_no_space_thai():
+    """When the LLM seed extractor fails, heuristic fallback should still handle Thai queries."""
+    class _FailingSeedLLM:
+        async def generate(self, prompt, system_prompt=None, max_tokens=128):
+            raise RuntimeError("llm unavailable")
+
+    uc = _make_use_case(llm=_FailingSeedLLM())
+    seeds = await uc.resolve_graph_seed_names("เอกเป็นใคร")
+
+    assert seeds == ["เอก"]
+    assert uc._last_graph_seed_source == "heuristic"
+    assert uc._last_graph_seed_strategy == "heuristic-fallback"
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_execute_uses_llm_graph_seed_for_no_space_thai():
+    """The full query pipeline should pass LLM-derived graph seeds into graph augmentation."""
+    graph_mock = AsyncMock()
+    graph_mock.query_related_entities = AsyncMock(return_value=[])
+
+    class _SeedLLM:
+        async def generate(self, prompt, system_prompt=None, max_tokens=128):
+            return '{"seeds":["เอก"]}'
+
+    uc = _make_use_case(llm=_SeedLLM())
+    uc._graph = graph_mock
+
+    req = UCQueryRequest(
+        query="เอกเป็นใคร",
+        namespace="tenant-a",
+        use_cache=False,
+        use_graph=True,
+    )
+    await uc.execute(req)
+
+    graph_mock.query_related_entities.assert_awaited_once()
+    assert graph_mock.query_related_entities.await_args.kwargs["entity_names"] == ["เอก"]
+
+
+@pytest.mark.asyncio
+async def test_query_use_case_execute_preserves_multi_entity_graph_seeds():
+    """The full query pipeline should preserve multi-entity graph seeds when the query clearly mentions more than one entity."""
+    graph_mock = AsyncMock()
+    graph_mock.query_related_entities = AsyncMock(return_value=[])
+
+    class _SeedLLM:
+        async def generate(self, prompt, system_prompt=None, max_tokens=128):
+            return '{"seeds":["เอก","โจ้"]}'
+
+    uc = _make_use_case(llm=_SeedLLM())
+    uc._graph = graph_mock
+
+    req = UCQueryRequest(
+        query="เอกกับโจ้ทำงานกับใคร",
+        namespace="tenant-a",
+        use_cache=False,
+        use_graph=True,
+    )
+    await uc.execute(req)
+
+    graph_mock.query_related_entities.assert_awaited_once()
+    assert graph_mock.query_related_entities.await_args.kwargs["entity_names"] == ["เอก", "โจ้"]
 
 
 @pytest.mark.asyncio

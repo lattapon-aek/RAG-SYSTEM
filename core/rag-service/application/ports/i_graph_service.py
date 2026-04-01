@@ -10,8 +10,8 @@ class IGraphService(ABC):
         top_k: int = 10,
         namespace: str = "default",
         entity_names: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
-        """Return related entities for a query from the graph."""
+    ) -> Dict[str, Any]:
+        """Return graph query payload (entities, relations, context_text)."""
         ...
 
     @abstractmethod

@@ -48,12 +48,18 @@ async def _startup():
     _logger = logging.getLogger(__name__)
     ollama_url = env_first("OLLAMA_BASE_URL", default="http://ollama:11434")
     llm_provider = env_provider("LLM_PROVIDER", default="ollama")
-    utility_provider = env_provider("UTILITY_LLM_PROVIDER", default=llm_provider)
-    generation_provider = env_provider("GENERATION_LLM_PROVIDER", default=llm_provider)
+    query_rewrite_provider = env_provider("QUERY_REWRITE_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=llm_provider)
+    hyde_provider = env_provider("HYDE_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=query_rewrite_provider)
+    query_decomposer_provider = env_provider("QUERY_DECOMPOSER_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=query_rewrite_provider)
+    query_seed_provider = env_provider("QUERY_SEED_LLM_PROVIDER", "GRAPH_QUERY_SEED_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=llm_provider)
+    compression_provider = env_provider("COMPRESSION_LLM_PROVIDER", default=llm_provider)
     embedding_provider = env_provider("EMBEDDING_PROVIDER", default="ollama")
     _fallback_llm = env_first("LLM_MODEL", "OLLAMA_LLM_MODEL", default="qwen3:0.6b")
-    utility_model = env_first("UTILITY_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
-    generation_model = env_first("GENERATION_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
+    query_rewrite_model = env_first("QUERY_REWRITE_LLM_MODEL", "UTILITY_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
+    hyde_model = env_first("HYDE_LLM_MODEL", "QUERY_REWRITE_LLM_MODEL", "UTILITY_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
+    query_decomposer_model = env_first("QUERY_DECOMPOSER_LLM_MODEL", "UTILITY_LLM_MODEL", "QUERY_REWRITE_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
+    query_seed_model = env_first("QUERY_SEED_LLM_MODEL", "GRAPH_QUERY_SEED_LLM_MODEL", "QUERY_REWRITE_LLM_MODEL", "UTILITY_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
+    compression_model = env_first("COMPRESSION_LLM_MODEL", "QUERY_REWRITE_LLM_MODEL", "LLM_MODEL", "OLLAMA_LLM_MODEL", default=_fallback_llm)
     embed_model = env_first("EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="bge-m3")
 
     async def _warm_ollama():
@@ -74,11 +80,20 @@ async def _startup():
                         json={"model": embed_model, "input": "warmup", "keep_alive": -1},
                     )
                     _logger.info("Ollama embed model '%s' pre-warmed", embed_model)
-                if utility_provider == "ollama":
+                llm_stages = [
+                    ("query rewrite", query_rewrite_provider, query_rewrite_model),
+                    ("HyDE", hyde_provider, hyde_model),
+                    ("query decomposer", query_decomposer_provider, query_decomposer_model),
+                    ("query seed", query_seed_provider, query_seed_model),
+                    ("compression", compression_provider, compression_model),
+                ]
+                for stage_name, provider, model in llm_stages:
+                    if provider != "ollama":
+                        continue
                     response = await client.post(
                         f"{ollama_url}/api/chat",
                         json={
-                            "model": utility_model,
+                            "model": model,
                             "messages": [{"role": "user", "content": "hi"}],
                             "stream": False,
                             "keep_alive": -1,
@@ -86,20 +101,7 @@ async def _startup():
                         },
                     )
                     response.raise_for_status()
-                    _logger.info("Ollama utility LLM model '%s' pre-warmed", utility_model)
-                if generation_provider == "ollama":
-                    response = await client.post(
-                        f"{ollama_url}/api/chat",
-                        json={
-                            "model": generation_model,
-                            "messages": [{"role": "user", "content": "hi"}],
-                            "stream": False,
-                            "keep_alive": -1,
-                            "options": {"num_predict": 1, "num_ctx": 512},
-                        },
-                    )
-                    response.raise_for_status()
-                    _logger.info("Ollama generation LLM model '%s' pre-warmed", generation_model)
+                    _logger.info("Ollama %s LLM model '%s' pre-warmed", stage_name, model)
         except Exception as exc:
             _logger.warning("Ollama pre-warm failed (non-fatal): %s", exc)
 

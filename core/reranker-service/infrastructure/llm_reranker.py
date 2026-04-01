@@ -120,12 +120,28 @@ class LLMRerankerModel(IRerankerModel):
         base_url: str = "http://ollama:11434",
         model: str = "qwen3:0.6b",
         max_candidates: int = 8,
+        api_key: str = "",
         timeout: float = 30.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._max_candidates = max_candidates
+        self._api_key = api_key.strip()
         self._timeout = timeout
+
+    def _chat_endpoint(self) -> str:
+        base = self._base_url
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
+        if "/v1/" in base:
+            return f"{base.rstrip('/')}/chat/completions"
+        if base.endswith("/api"):
+            return f"{base}/chat"
+        if base.endswith("/api/chat"):
+            return base
+        if "opentyphoon" in base or "openai" in base:
+            return f"{base}/chat/completions"
+        return f"{base}/api/chat"
 
     async def rerank(
         self,
@@ -141,20 +157,35 @@ class LLMRerankerModel(IRerankerModel):
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
+                headers = {}
+                if self._api_key:
+                    headers["Authorization"] = f"Bearer {self._api_key}"
+                    headers["api-key"] = self._api_key
+                payload = {
+                    "model": self._model,
+                    "messages": [
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "stream": False,
+                    "temperature": 0,
+                    "max_tokens": 256,
+                }
                 resp = await client.post(
-                    f"{self._base_url}/api/chat",
-                    json={
-                        "model": self._model,
-                        "messages": [
-                            {"role": "system", "content": _SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "stream": False,
-                        "options": {"num_predict": 256, "temperature": 0},
-                    },
+                    self._chat_endpoint(),
+                    json=payload,
+                    headers=headers,
                 )
                 resp.raise_for_status()
-                raw = resp.json()["message"]["content"]
+                body = resp.json()
+                raw = ""
+                if isinstance(body, dict):
+                    if "choices" in body:
+                        choices = body.get("choices") or []
+                        if choices:
+                            raw = choices[0].get("message", {}).get("content", "") or ""
+                    elif "message" in body:
+                        raw = body.get("message", {}).get("content", "") or ""
         except Exception as exc:
             raise RerankError(f"LLM reranker HTTP error: {exc}") from exc
 

@@ -47,26 +47,28 @@ class GraphServiceClient(IGraphService):
             return []
 
         seeds: List[str] = []
-
-        team_match = re.search(
-            r"(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})",
-            cleaned,
-            flags=re.IGNORECASE,
-        )
-        if team_match:
-            team_tail = team_match.group(1).strip()
-            team_name = re.sub(
-                r"\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$",
-                "",
-                team_tail,
-                flags=re.IGNORECASE,
-            ).strip(" ,.;:，。")
-            if team_name:
-                seeds.append(team_name)
+        stopwords = {
+            "ใคร", "อะไร", "ที่ไหน", "เมื่อไร", "ทำไม", "อย่างไร",
+            "who", "what", "where", "when", "why", "how",
+            "query", "question",
+        }
 
         for token in re.findall(r"\b[A-Z]{2,}\b", cleaned):
             if token not in seeds:
                 seeds.append(token)
+
+        compact = re.sub(r"\s+", "", cleaned)
+        if compact and len(cleaned.split()) == 1 and compact.lower() not in stopwords:
+            if re.search(r"[A-Za-zก-๙]", compact):
+                seeds.append(compact)
+
+        if compact:
+            for marker in ("เป็นใคร", "คือใคร", "เป็นอะไร", "คืออะไร", "ใครเป็น"):
+                if marker in compact:
+                    prefix = compact.split(marker, 1)[0].strip(" ,.;:，。")
+                    if prefix and prefix.lower() not in stopwords:
+                        seeds.append(prefix)
+                    break
 
         return list(dict.fromkeys(seeds))
 
@@ -76,7 +78,7 @@ class GraphServiceClient(IGraphService):
         top_k: int = 10,
         namespace: str = "default",
         entity_names: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         async def _call():
             seeds = entity_names if entity_names is not None else self._extract_seed_names(query)
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -90,7 +92,7 @@ class GraphServiceClient(IGraphService):
                     },
                 )
                 response.raise_for_status()
-                return response.json().get("entities", [])
+                return response.json()
 
         try:
             return await self._breaker.call(lambda: _retry(_call, "query_related_entities"))
@@ -98,7 +100,7 @@ class GraphServiceClient(IGraphService):
             logger.warning("Graph service unavailable (%s): %s — skipping graph augmentation",
                            type(exc).__name__, exc)
             # Fallback: vector-only (empty graph result)
-            return []
+            return {"entities": [], "relations": [], "context_text": ""}
 
     async def delete_namespace(self, namespace: str) -> dict:
         async def _call():

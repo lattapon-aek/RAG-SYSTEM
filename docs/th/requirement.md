@@ -12,7 +12,7 @@
 - ดูสถานะ job, retry, cancel, reprocess และสถิติ queue
 - เก็บประวัติ version ของเอกสารและ rollback ได้
 - ตรวจดู chunk ของเอกสารได้
-- ค้นคืนข้อมูลแบบ vector retrieval และตอบแบบ RAG
+- ค้นคืนข้อมูลแบบ vector retrieval และสรุปเป็น context brief สำหรับส่งต่อ
 - รองรับการ extract และ query กราฟ
 - รองรับ reranking
 - มี workflow สำหรับ analysis, feedback และ self-learning
@@ -47,7 +47,7 @@
 | ส่วนของ requirement | อ่านต่อ |
 |---|---|
 | Document ingestion, preview, queue, status, retry, cancel, rollback, chunk inspection | [Ingestion walkthrough](ingestion-walkthrough.md) |
-| Vector retrieval, RAG answer generation, reranking, cache, memory, citation | [Query walkthrough](query-walkthrough.md) |
+| Vector retrieval, RAG context brief assembly, reranking, cache, memory, grounding | [Query walkthrough](query-walkthrough.md) |
 | Graph extraction และ graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) และ [Query walkthrough](query-walkthrough.md) |
 | Intelligence workflows และ background analysis | [Query walkthrough](query-walkthrough.md) |
 | Dashboard และ MCP access | [Query walkthrough](query-walkthrough.md) และ [Ingestion walkthrough](ingestion-walkthrough.md) |

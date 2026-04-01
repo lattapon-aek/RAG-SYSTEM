@@ -15,9 +15,9 @@
 
 ### ขอบเขตของแต่ละ service
 
-- `core/rag-service` ดูแล query orchestration, retrieval, reranking, memory และ citation
+- `core/rag-service` ดูแล query orchestration, retrieval, reranking, memory, grounding และ context brief assembly
 - `core/graph-service` ดูแล entity extraction และ graph APIs
-- `core/reranker-service` แยก backend สำหรับ reranking
+- `core/reranker-service` แยก backend สำหรับ reranking รวมถึงเส้นทาง LLM/Typhoon reranker
 - `ingestion/ingestion-service` ดูแล ingestion, preview, job queue และ document versioning
 - `ingestion/knowledge-connector` ดูแลการเก็บความรู้จากแหล่งภายนอก
 - `intelligence-service` ดูแลงาน intelligence แบบ scheduled
@@ -50,7 +50,7 @@ stack นี้พึ่งพา:
 ชั้น design จะอ่านง่ายขึ้นถ้าตาม flow การทำงานจริง:
 
 - [Ingestion walkthrough](ingestion-walkthrough.md) สำหรับ ingestion pipeline และ worker flow
-- [Query walkthrough](query-walkthrough.md) สำหรับ retrieval, reranking และ answer generation
+- [Query walkthrough](query-walkthrough.md) สำหรับ retrieval, reranking และ context brief assembly
 
 ### แผนที่ design ไป walkthrough
 

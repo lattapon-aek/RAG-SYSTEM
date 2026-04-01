@@ -13,9 +13,9 @@ The system follows a layered / hexagonal style:
 
 ## Service boundaries
 
-- `core/rag-service` handles query orchestration, retrieval, reranking, memory, and citation logic
+- `core/rag-service` handles query orchestration, retrieval, reranking, memory, grounding, and context brief assembly
 - `core/graph-service` handles entity extraction and graph APIs
-- `core/reranker-service` isolates reranking backends
+- `core/reranker-service` isolates reranking backends, including the LLM/Typhoon reranker path
 - `ingestion/ingestion-service` handles ingestion, preview, job queue, and document versioning
 - `ingestion/knowledge-connector` handles knowledge collection from external sources
 - `intelligence-service` handles scheduled intelligence jobs
@@ -48,7 +48,7 @@ The stack depends on:
 The design layer becomes easier to follow when you trace the live request paths:
 
 - [Ingestion walkthrough](ingestion-walkthrough.md) for the ingestion pipeline and worker flow
-- [Query walkthrough](query-walkthrough.md) for retrieval, reranking, and answer generation
+- [Query walkthrough](query-walkthrough.md) for retrieval, reranking, and context brief assembly
 
 ## Design-to-walkthrough map
 

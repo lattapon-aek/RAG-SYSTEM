@@ -61,7 +61,7 @@ async def metrics_summary(doc_repo=Depends(get_doc_repo)):
 
     query_volume = 0
     avg_retrieval_ms = 0.0
-    avg_generation_ms = 0.0
+    avg_answer_latency_ms = 0.0
     avg_total_ms = 0.0
     cache_hit_rate = 0.0
     pending_approvals = 0
@@ -71,7 +71,7 @@ async def metrics_summary(doc_repo=Depends(get_doc_repo)):
             """SELECT
                 COUNT(*) AS total,
                 AVG(retrieval_latency_ms) AS avg_ret,
-                AVG(generation_latency_ms) AS avg_gen,
+                AVG(answer_latency_ms) AS avg_answer,
                 AVG(total_latency_ms) AS avg_total,
                 COUNT(*) FILTER (WHERE from_cache = TRUE) AS cache_hits
                FROM interaction_log"""
@@ -79,7 +79,7 @@ async def metrics_summary(doc_repo=Depends(get_doc_repo)):
         if row and row["total"]:
             query_volume = int(row["total"])
             avg_retrieval_ms = float(row["avg_ret"] or 0.0)
-            avg_generation_ms = float(row["avg_gen"] or 0.0)
+            avg_answer_latency_ms = float(row["avg_answer"] or 0.0)
             avg_total_ms = float(row["avg_total"] or 0.0)
             cache_hits = int(row["cache_hits"] or 0)
             cache_hit_rate = cache_hits / query_volume if query_volume > 0 else 0.0
@@ -156,7 +156,7 @@ async def metrics_summary(doc_repo=Depends(get_doc_repo)):
     return MetricsSummaryResponse(
         query_volume_total=query_volume,
         avg_retrieval_latency_ms=avg_retrieval_ms,
-        avg_generation_latency_ms=avg_generation_ms,
+        avg_answer_latency_ms=avg_answer_latency_ms,
         avg_total_latency_ms=avg_total_ms,
         cache_hit_rate=cache_hit_rate,
         document_count=doc_count,
@@ -188,7 +188,6 @@ async def query(request: Request, req: QueryRequest, use_case=Depends(get_query_
             use_rewrite=req.use_rewrite,
             use_decompose=req.use_decompose,
             use_graph=req.use_graph,
-            use_tools=req.use_tools,
         )
         result = await use_case.execute(uc_req)
         return QueryResponse(
@@ -206,12 +205,13 @@ async def query(request: Request, req: QueryRequest, use_case=Depends(get_query_
                 for c in result.citations
             ],
             graph_entities=result.graph_entities,
+            graph_summary_texts=result.graph_summary_texts,
             rewritten_query=result.rewritten_query,
             hyde_used=result.hyde_used,
             sub_queries=result.sub_queries,
             from_cache=result.from_cache,
             retrieval_latency_ms=result.retrieval_latency_ms,
-            generation_latency_ms=result.generation_latency_ms,
+            answer_latency_ms=result.answer_latency_ms,
             total_latency_ms=result.total_latency_ms,
             grounding_score=result.grounding_score,
             low_confidence=result.low_confidence,
@@ -220,6 +220,8 @@ async def query(request: Request, req: QueryRequest, use_case=Depends(get_query_
             knowledge_gap=result.knowledge_gap,
             top_rerank_score=result.top_rerank_score,
             graph_seed_names=result.graph_seed_names,
+            graph_seed_source=result.graph_seed_source,
+            graph_seed_strategy=result.graph_seed_strategy,
         )
     except EmptyQueryError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -254,7 +256,6 @@ async def query_stream(request: Request, req: QueryRequest, use_case=Depends(get
         use_rewrite=req.use_rewrite,
         use_decompose=req.use_decompose,
         use_graph=req.use_graph,
-        use_tools=req.use_tools,
     )
 
     async def event_generator():
@@ -288,11 +289,30 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
     t0 = _time.monotonic()
     stages: list = []
     retrieval_query = req.query
-    graph_seed_names = use_case._extract_graph_seed_names(retrieval_query)
+    graph_seed_names: list[str] = []
+    graph_seed_source = "empty"
+    graph_seed_strategy = "none"
 
     def _stage(name: str, fired: bool, ms: float, **meta) -> None:
         stages.append(StageTimingInfo(stage=name, fired=fired,
                                       latency_ms=round(ms, 2), meta=meta))
+
+    # ── Stage: graph seed extraction (optional, graph-only) ──────────────────
+    if req.use_graph:
+        t = _time.monotonic()
+        graph_seed_names = await use_case.resolve_graph_seed_names(retrieval_query)
+        graph_seed_source = getattr(use_case, "_last_graph_seed_source", "empty")
+        graph_seed_strategy = getattr(use_case, "_last_graph_seed_strategy", "none")
+        graph_seed_ms = (_time.monotonic() - t) * 1000
+        _stage(
+            "graph_seed",
+            True,
+            graph_seed_ms,
+            seed_names=graph_seed_names,
+            seed_count=len(graph_seed_names),
+            seed_source=graph_seed_source,
+            seed_strategy=graph_seed_strategy,
+        )
 
     # ── Stage: embed (always) ─────────────────────────────────────────────────
     t = _time.monotonic()
@@ -322,6 +342,8 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
                 cached_answer=(getattr(cached, "answer", "") or "")[:500],
                 embed_latency_ms=round(embed_ms, 2),
                 graph_seed_names=graph_seed_names,
+                graph_seed_source=graph_seed_source,
+                graph_seed_strategy=graph_seed_strategy,
             )
         _stage("cache", True, cache_ms, hit=False)
 
@@ -397,6 +419,8 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
 
     # ── Stage: graph augmentation (optional, multi-namespace fan-out) ─────────
     graph_entities: list = []
+    graph_relations: list = []
+    graph_summary_texts: list = []
     graph_ms = 0.0
     if req.use_graph and use_case._graph:
         t = _time.monotonic()
@@ -411,22 +435,43 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
                 for ns in effective_namespaces
             ]
             ns_graph_results = await asyncio.gather(*ns_graph_tasks, return_exceptions=True)
-            raw_all: list = []
+            raw_all_entities: list = []
+            raw_all_relations: list = []
             for r in ns_graph_results:
-                if not isinstance(r, Exception) and r:
-                    raw_all.extend(r)
+                if isinstance(r, Exception) or not r:
+                    continue
+                if isinstance(r, dict):
+                    raw_all_entities.extend(r.get("entities", []) or [])
+                    raw_all_relations.extend(r.get("relations", []) or [])
+                    context_text = str(r.get("context_text", "") or "").strip()
+                    if context_text:
+                        graph_summary_texts.append(context_text)
+                else:
+                    raw_all_entities.extend(r)
             graph_entities = [
                 {"name": e.get("name", ""), "type": e.get("type", e.get("label", ""))}
                 if isinstance(e, dict) else {"name": str(e), "type": ""}
-                for e in raw_all
+                for e in raw_all_entities
+            ]
+            graph_relations = [
+                {
+                    "source": rel.get("source", rel.get("source_entity", "")),
+                    "target": rel.get("target", rel.get("target_entity", "")),
+                    "relation_type": rel.get("relation_type", rel.get("type", "RELATED_TO")),
+                }
+                for rel in raw_all_relations
+                if isinstance(rel, dict)
             ]
         except Exception:
             pass
         graph_ms = (_time.monotonic() - t) * 1000
         _stage("graph", True, graph_ms,
                entity_count=len(graph_entities),
+               relation_count=len(graph_relations),
                seed_names=graph_seed_names,
-               seed_count=len(graph_seed_names))
+               seed_count=len(graph_seed_names),
+               seed_source=graph_seed_source,
+               seed_strategy=graph_seed_strategy)
 
     # ── Stage: rerank (optional) ──────────────────────────────────────────────
     final_results = vector_results
@@ -480,6 +525,7 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
         query=req.query,
         chunks=chunks,
         graph_entities=graph_entities,
+        graph_summary_texts=graph_summary_texts,
         graph_seed_names=graph_seed_names,
         retrieval_latency_ms=total_ms,
         total_chunks_before_rerank=total_before,
@@ -494,6 +540,8 @@ async def retrieve(req: RetrieveRequest, doc_repo=Depends(get_doc_repo),
         rerank_latency_ms=round(rerank_ms, 2),
         knowledge_gap=knowledge_gap,
         top_rerank_score=top_score,
+        graph_seed_source=graph_seed_source,
+        graph_seed_strategy=graph_seed_strategy,
     )
 
 

@@ -60,39 +60,83 @@ def stage_model(*keys: str, default: str) -> str:
 def build_model_config() -> dict[str, str]:
     """Return canonical + legacy-compatible model env values."""
     llm_provider = env_provider("LLM_PROVIDER", default="ollama")
-    utility_llm_provider = stage_provider("UTILITY_LLM_PROVIDER", default=llm_provider)
-    generation_llm_provider = stage_provider("GENERATION_LLM_PROVIDER", default=llm_provider)
-    graph_llm_provider = stage_provider("GRAPH_LLM_PROVIDER", default=utility_llm_provider)
-    gap_draft_llm_provider = stage_provider("GAP_DRAFT_LLM_PROVIDER", default=generation_llm_provider)
+    query_rewrite_llm_provider = stage_provider("QUERY_REWRITE_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=llm_provider)
+    hyde_llm_provider = stage_provider("HYDE_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=query_rewrite_llm_provider)
+    query_decomposer_llm_provider = stage_provider("QUERY_DECOMPOSER_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=query_rewrite_llm_provider)
+    query_seed_llm_provider = stage_provider("QUERY_SEED_LLM_PROVIDER", "GRAPH_QUERY_SEED_LLM_PROVIDER", "UTILITY_LLM_PROVIDER", default=llm_provider)
+    compression_llm_provider = stage_provider("COMPRESSION_LLM_PROVIDER", default=llm_provider)
+    graph_llm_provider = stage_provider("GRAPH_LLM_PROVIDER", default=query_seed_llm_provider)
+    gap_draft_llm_provider = stage_provider("GAP_DRAFT_LLM_PROVIDER", default=llm_provider)
     embedding_provider = env_provider("EMBEDDING_PROVIDER", default="ollama")
     llm_model_default = default_llm_model(llm_provider)
-    utility_llm_model_default = default_llm_model(utility_llm_provider)
-    generation_llm_model_default = default_llm_model(generation_llm_provider)
+    query_rewrite_llm_model_default = default_llm_model(query_rewrite_llm_provider)
+    hyde_llm_model_default = default_llm_model(hyde_llm_provider)
+    query_decomposer_llm_model_default = default_llm_model(query_decomposer_llm_provider)
+    query_seed_llm_model_default = default_llm_model(query_seed_llm_provider)
+    compression_llm_model_default = default_llm_model(compression_llm_provider)
     graph_llm_model_default = default_llm_model(graph_llm_provider)
     gap_draft_llm_model_default = default_llm_model(gap_draft_llm_provider)
     embedding_model_default = default_embedding_model(embedding_provider)
     return {
         "llm_provider": llm_provider,
-        "utility_llm_provider": utility_llm_provider,
-        "generation_llm_provider": generation_llm_provider,
+        "utility_llm_provider": query_rewrite_llm_provider,  # legacy alias
+        "query_rewrite_llm_provider": query_rewrite_llm_provider,
+        "hyde_llm_provider": hyde_llm_provider,
+        "query_decomposer_llm_provider": query_decomposer_llm_provider,
+        "query_seed_llm_provider": query_seed_llm_provider,
         "graph_llm_provider": graph_llm_provider,
         "gap_draft_llm_provider": gap_draft_llm_provider,
+        "compression_llm_provider": compression_llm_provider,
         "embedding_provider": embedding_provider,
         "llm_model": stage_model("LLM_MODEL", "OLLAMA_LLM_MODEL", default=llm_model_default),
         "utility_llm_model": stage_model(
+            "QUERY_REWRITE_LLM_MODEL",
             "UTILITY_LLM_MODEL",
             "LLM_MODEL",
             "OLLAMA_LLM_MODEL",
-            default=utility_llm_model_default,
-        ),
-        "generation_llm_model": stage_model(
-            "GENERATION_LLM_MODEL",
+            default=query_rewrite_llm_model_default,
+        ),  # legacy alias
+        "query_rewrite_llm_model": stage_model(
+            "QUERY_REWRITE_LLM_MODEL",
+            "UTILITY_LLM_MODEL",
             "LLM_MODEL",
             "OLLAMA_LLM_MODEL",
-            default=generation_llm_model_default,
+            default=query_rewrite_llm_model_default,
+        ),
+        "hyde_llm_model": stage_model(
+            "HYDE_LLM_MODEL",
+            "QUERY_REWRITE_LLM_MODEL",
+            "UTILITY_LLM_MODEL",
+            "LLM_MODEL",
+            "OLLAMA_LLM_MODEL",
+            default=hyde_llm_model_default,
+        ),
+        "query_decomposer_llm_model": stage_model(
+            "QUERY_DECOMPOSER_LLM_MODEL",
+            "UTILITY_LLM_MODEL",
+            "QUERY_REWRITE_LLM_MODEL",
+            "LLM_MODEL",
+            "OLLAMA_LLM_MODEL",
+            default=query_decomposer_llm_model_default,
+        ),
+        "query_seed_llm_model": stage_model(
+            "QUERY_SEED_LLM_MODEL",
+            "GRAPH_QUERY_SEED_LLM_MODEL",
+            "QUERY_REWRITE_LLM_MODEL",
+            "UTILITY_LLM_MODEL",
+            "LLM_MODEL",
+            "OLLAMA_LLM_MODEL",
+            default=query_seed_llm_model_default,
+        ),
+        "compression_llm_model": stage_model(
+            "COMPRESSION_LLM_MODEL",
+            "LLM_MODEL",
+            "OLLAMA_LLM_MODEL",
+            default=compression_llm_model_default,
         ),
         "graph_llm_model": stage_model(
             "GRAPH_LLM_MODEL",
+            "QUERY_SEED_LLM_MODEL",
             "UTILITY_LLM_MODEL",
             "LLM_MODEL",
             "OLLAMA_LLM_MODEL",
@@ -100,11 +144,11 @@ def build_model_config() -> dict[str, str]:
         ),
         "gap_draft_llm_model": stage_model(
             "GAP_DRAFT_LLM_MODEL",
-            "GENERATION_LLM_MODEL",
             "LLM_MODEL",
             "OLLAMA_LLM_MODEL",
             default=gap_draft_llm_model_default,
         ),
+        "compression_llm_system_prompt": env_first("COMPRESSION_LLM_SYSTEM_PROMPT", default=""),
         "embedding_model": env_first("EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default=embedding_model_default),
         "ollama_base_url": env_first("OLLAMA_BASE_URL", default="http://ollama:11434"),
         "openai_api_key": env_first("OPENAI_API_KEY", default=""),

@@ -1,10 +1,10 @@
 # Query Walkthrough
 
-หน้านี้อธิบายเส้นทางของคำถามตั้งแต่ผู้ใช้ส่งเข้าระบบ จนระบบตอบกลับพร้อมหลักฐานประกอบ
+หน้านี้อธิบายเส้นทางของคำถามตั้งแต่ผู้ใช้ส่งเข้าระบบ จนระบบส่ง context brief พร้อมหลักฐานประกอบ
 
 ## ทำไมจึงสำคัญ
 
-ฝั่ง query คือส่วนที่ทำให้เห็น design ของ RAG ชัดที่สุด เพราะจะเห็น retrieval, reranking, memory, grounding และ citation checks อยู่ใน pipeline เดียว
+ฝั่ง query คือส่วนที่ทำให้เห็น design ของ RAG ชัดที่สุด เพราะจะเห็น retrieval, reranking, memory, grounding และ context shaping อยู่ใน pipeline เดียว
 
 ## Flow รวม
 
@@ -15,8 +15,8 @@
   -> retrieval ทำงานกับ vector และ graph sources
   -> รวมผลและ rerank
   -> สร้างและบีบอัด context
-  -> สร้างคำตอบและตรวจสอบ
-  -> ส่ง citation และ metadata กลับไป
+  -> ประกอบ context brief และตรวจสอบ
+  -> ส่ง supporting evidence และ metadata กลับไป
 ```
 
 ```mermaid
@@ -33,9 +33,9 @@ flowchart LR
     V --> MRG[Merge and rerank]
     G --> MRG
     MRG --> CTX[Context builder]
-    CTX --> GEN[Answer generation]
-    GEN --> VER[Grounding / citation verification]
-    VER --> O[Answer + citations]
+    CTX --> ANS[Context brief]
+    ANS --> VER[Grounding / evidence verification]
+    VER --> O[Context brief + evidence]
 ```
 
 ## ทีละขั้น
@@ -80,7 +80,7 @@ logic หลักอยู่ใน `core/rag-service/application/query_use_cas
 
 ### 5. สร้าง context
 
-จากนั้น use case จะเตรียม context สำหรับ generation
+จากนั้น use case จะเตรียม context สำหรับการประกอบคำตอบขั้นสุดท้าย
 
 อาจมีการ:
 
@@ -92,17 +92,17 @@ logic หลักอยู่ใน `core/rag-service/application/query_use_cas
 
 นี่คือจุดที่ผล retrieval ถูกแปลงเป็น evidence ที่ prompt ใช้งานได้
 
-### 6. สร้างคำตอบ
+### 6. ประกอบ context brief จาก context
 
-เมื่อ prompt พร้อม ระบบจะสร้างคำตอบ
+เมื่อ context พร้อม ระบบจะคืน brief ที่มาจาก context โดยตรง
 
-pipeline ใช้ได้ทั้งแบบ streaming และ non-streaming ขึ้นอยู่กับ caller ถ้าเป็น streaming จะช่วยให้ UI แสดงคำตอบบางส่วนได้เร็วขึ้น
+pipeline ใช้ได้ทั้งแบบ streaming และ non-streaming ขึ้นอยู่กับ caller ถ้าเป็น streaming จะช่วยให้ UI แสดงส่วนของ brief ได้เร็วขึ้น
 
-### 7. ตรวจ citation และ grounding
+### 7. ตรวจ evidence และ grounding
 
-ระบบไม่ได้หยุดแค่ generation
+ระบบไม่ได้หยุดแค่การประกอบ context
 
-ยังตรวจว่าคำตอบยึดกับหลักฐานที่ค้นมาจริงหรือไม่ และส่ง citation หรือ reference กลับไปพร้อมผลลัพธ์สุดท้าย
+ยังตรวจว่า brief ที่ส่งกลับยึดกับหลักฐานที่ค้นมาจริงหรือไม่ และส่ง supporting reference กลับไปพร้อมผลลัพธ์สุดท้าย
 
 ### 8. บันทึก feedback ได้
 
@@ -112,7 +112,7 @@ pipeline ใช้ได้ทั้งแบบ streaming และ non-streami
 
 ### 9. Streaming และ non-streaming ใช้ pipeline แกนเดียวกัน
 
-ขั้นตอนสร้างคำตอบสุดท้ายอาจส่งออกทีละ token หรือส่งกลับมาทั้งชุด
+ขั้นตอนประกอบ brief สุดท้ายอาจส่งออกทีละ token หรือส่งกลับมาทั้งชุด
 
 ทั้งสองแบบใช้ retrieval และ context-building ชุดเดียวกัน ดังนั้นเวลาตรวจปัญหาควรเริ่มจากชั้นบนของ pipeline ก่อน ไม่ใช่ transport layer
 
@@ -121,7 +121,7 @@ pipeline ใช้ได้ทั้งแบบ streaming และ non-streami
 - `core/rag-service/interface/routers.py`
 - `core/rag-service/application/query_use_case.py`
 - `core/rag-service/application/retrieval/`
-- `core/rag-service/application/generation/`
+- `core/rag-service/application/context_compressor.py`
 - `core/rag-service/infrastructure/`
 - `intelligence-service/main.py`
 
@@ -133,6 +133,5 @@ pipeline ใช้ได้ทั้งแบบ streaming และ non-streami
 - retrieval quality
 - reranking
 - context packing
-- tool routing
-- generation settings
-- citation verification
+- compression settings
+- evidence verification

@@ -62,12 +62,6 @@ function buildConfigSections() {
       note: 'Query rewrite, HyDE, and graph extraction default provider',
     },
     {
-      key: 'GENERATION_LLM_PROVIDER',
-      label: 'Generation LLM Provider',
-      ...envValueAlias(['GENERATION_LLM_PROVIDER', 'LLM_PROVIDER'], cfg.generationLlmProvider),
-      note: 'Answer generation and drafting provider',
-    },
-    {
       key: 'GRAPH_LLM_PROVIDER',
       label: 'Graph LLM Provider',
       ...envValueAlias(['GRAPH_LLM_PROVIDER', 'UTILITY_LLM_PROVIDER', 'LLM_PROVIDER'], cfg.graphLlmProvider),
@@ -76,7 +70,7 @@ function buildConfigSections() {
     {
       key: 'GAP_DRAFT_LLM_PROVIDER',
       label: 'Gap Draft Provider',
-      ...envValueAlias(['GAP_DRAFT_LLM_PROVIDER', 'GENERATION_LLM_PROVIDER', 'LLM_PROVIDER'], cfg.gapDraftLlmProvider),
+      ...envValueAlias(['GAP_DRAFT_LLM_PROVIDER', 'LLM_PROVIDER'], cfg.gapDraftLlmProvider),
       note: 'Knowledge gap auto-drafting provider',
     },
     {
@@ -101,12 +95,6 @@ function buildConfigSections() {
       note: 'Query rewrite, HyDE, graph extraction, and utility flows',
     },
     {
-      key: 'GENERATION_LLM_MODEL',
-      label: 'Generation LLM',
-      ...envValueAlias(['GENERATION_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], cfg.generationLlmModel),
-      note: 'Answer generation',
-    },
-    {
       key: 'GRAPH_LLM_MODEL',
       label: 'Graph LLM',
       ...envValueAlias(['GRAPH_LLM_MODEL', 'UTILITY_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], cfg.graphLlmModel),
@@ -115,7 +103,7 @@ function buildConfigSections() {
     {
       key: 'GAP_DRAFT_LLM_MODEL',
       label: 'Gap Draft LLM',
-      ...envValueAlias(['GAP_DRAFT_LLM_MODEL', 'GENERATION_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], cfg.gapDraftLlmModel),
+      ...envValueAlias(['GAP_DRAFT_LLM_MODEL', 'LLM_MODEL', 'OLLAMA_LLM_MODEL'], cfg.gapDraftLlmModel),
       note: 'Knowledge gap drafting fallback',
     },
     {
@@ -342,19 +330,13 @@ export async function GET() {
   const models = sectionByTitle(config_sections, 'Models')?.items ?? []
   const pipeline = sectionByTitle(config_sections, 'Pipeline')?.items ?? []
   const utilityProvider = providers.find((item) => item.key === 'UTILITY_LLM_PROVIDER')?.value
-  const generationProvider = providers.find((item) => item.key === 'GENERATION_LLM_PROVIDER')?.value
   const graphProvider = providers.find((item) => item.key === 'GRAPH_LLM_PROVIDER')?.value
   const llm = models.find((item) => item.key === 'UTILITY_LLM_MODEL')?.value
-  const gen = models.find((item) => item.key === 'GENERATION_LLM_MODEL')?.value
   const graphBackend = pipeline.find((item) => item.key === 'GRAPH_EXTRACTOR_BACKEND')?.value
   const embed = models.find((item) => item.key === 'EMBEDDING_MODEL')?.value
   const embeddingProvider = providers.find((item) => item.key === 'EMBEDDING_PROVIDER')?.value
 
-  if (llm && gen && llm !== gen) warnings.push(`Utility LLM and generation LLM differ (${llm} vs ${gen}).`)
   if (graphBackend === 'llm' && !embed) warnings.push('Graph extraction is LLM-based but embedding model is missing.')
-  if (utilityProvider && generationProvider && utilityProvider !== generationProvider) {
-    warnings.push(`Utility provider (${utilityProvider}) differs from generation provider (${generationProvider}).`)
-  }
   if (graphProvider && graphProvider !== utilityProvider) warnings.push(`Graph provider (${graphProvider}) differs from utility provider (${utilityProvider}).`)
   if (embeddingProvider && embeddingProvider !== 'ollama') warnings.push(`Embedding provider is ${embeddingProvider}; Ollama warmup will be skipped for embeddings.`)
   if (down > 0) warnings.push(`${down} service(s) are down.`)

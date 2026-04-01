@@ -187,6 +187,11 @@ class IngestPreviewResponse(BaseModel):
     embedding_provider: str = "ollama"
     embedding_model: str = ""
     graph_extraction_mode: str = "unknown"
+    graph_extractor_backend: str = "unknown"
+    graph_system_prompt_source: str = "unknown"
+    graph_system_prompt_overridden: bool = False
+    graph_llm_provider: str = "unknown"
+    graph_llm_model: str = "unknown"
 
 
 # Response สำหรับการ extract text จากไฟล์

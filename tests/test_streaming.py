@@ -223,7 +223,7 @@ async def test_stream_done_event_has_request_id_and_latency():
 
 @pytest.mark.asyncio
 async def test_stream_assembled_answer_matches_tokens():
-    """The tokens streamed should contain the LLM answer tokens (may include warning suffix)."""
+    """The tokens streamed should contain the assembled answer tokens (may include warning suffix)."""
     # Use context-matching tokens so citation verifier doesn't add a warning suffix
     tokens = ("Hello", " world", " context")
     uc = _make_use_case(llm_tokens=tokens)

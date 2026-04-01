@@ -37,6 +37,25 @@ from model_config import build_model_config
 from provider_factory import create_embedding_service, create_chat_llm_service
 
 
+def _stage_llm_cfg(
+    runtime: Dict[str, Any],
+    provider_key: str,
+    model_key: str,
+    *,
+    provider_fallback_keys: tuple[str, ...] = (),
+    model_fallback_keys: tuple[str, ...] = (),
+) -> Dict[str, Any]:
+    provider_candidates = (provider_key, *provider_fallback_keys, "llm_provider")
+    model_candidates = (model_key, *model_fallback_keys, "llm_model")
+    provider = next((runtime[key] for key in provider_candidates if runtime.get(key)), runtime.get("llm_provider", "ollama"))
+    model = next((runtime[key] for key in model_candidates if runtime.get(key)), runtime.get("llm_model", "qwen3:0.6b"))
+    return {
+        **runtime,
+        "llm_provider": provider,
+        "llm_model": model,
+    }
+
+
 class EmbeddingFactory:
     @staticmethod
     def create(cfg: Dict[str, Any]) -> IEmbeddingService:
@@ -104,12 +123,13 @@ class RerankerFactory:
 class CompressorFactory:
     @staticmethod
     def create(cfg: Dict[str, Any], llm: Optional[ILLMService] = None,
-               compression_threshold: float = 0.1) -> IContextCompressor:
+               compression_threshold: float = 0.1,
+               system_prompt: str = "") -> IContextCompressor:
         strategy = cfg.get("compressor", os.getenv("COMPRESSOR", "noop"))
         if strategy == "extractive":
             return ExtractiveCompressor(threshold=compression_threshold)
         if strategy == "llm" and llm:
-            return LLMCompressor(llm=llm)
+            return LLMCompressor(llm=llm, system_prompt=system_prompt)
         return NoOpCompressor()
 
 
@@ -117,34 +137,59 @@ class RAGServiceFactory:
     @staticmethod
     def from_config(cfg: Optional[Dict[str, Any]] = None) -> QueryUseCase:
         cfg = cfg or {}
+        runtime = {**build_model_config(), **cfg}
 
         policy = RoutingPolicy.from_env()
 
-        embedding = EmbeddingFactory.create(cfg)
-        vector_store = VectorStoreFactory.create(cfg)
+        embedding = EmbeddingFactory.create(runtime)
+        vector_store = VectorStoreFactory.create(runtime)
 
-        # Utility LLM: HyDE, query rewrite, decomposer — optimize for speed
-        utility_cfg = {
-            **cfg,
-            "llm_provider": cfg.get("utility_llm_provider", cfg.get("llm_provider", "ollama")),
-            "llm_model": cfg.get("utility_llm_model", cfg.get("llm_model", "qwen3:0.6b")),
-        }
-        utility_llm = LLMFactory.create(utility_cfg)
-
-        # Generation LLM: answer generation, context compression — optimize for quality
-        generation_cfg = {
-            **cfg,
-            "llm_provider": cfg.get("generation_llm_provider", cfg.get("llm_provider", "ollama")),
-            "llm_model": cfg.get("generation_llm_model", cfg.get("llm_model", "qwen3:0.6b")),
-        }
-        generation_llm = LLMFactory.create(generation_cfg)
+        # Stage-specific LLMs
+        query_rewrite_llm = LLMFactory.create(_stage_llm_cfg(
+            runtime,
+            "query_rewrite_llm_provider",
+            "query_rewrite_llm_model",
+            provider_fallback_keys=("utility_llm_provider",),
+            model_fallback_keys=("utility_llm_model",),
+        ))
+        hyde_llm = LLMFactory.create(_stage_llm_cfg(
+            runtime,
+            "hyde_llm_provider",
+            "hyde_llm_model",
+            provider_fallback_keys=("query_rewrite_llm_provider", "utility_llm_provider"),
+            model_fallback_keys=("query_rewrite_llm_model", "utility_llm_model"),
+        ))
+        query_decomposer_llm = LLMFactory.create(_stage_llm_cfg(
+            runtime,
+            "query_decomposer_llm_provider",
+            "query_decomposer_llm_model",
+            provider_fallback_keys=("query_rewrite_llm_provider", "utility_llm_provider"),
+            model_fallback_keys=("query_rewrite_llm_model", "utility_llm_model"),
+        ))
+        query_seed_llm = LLMFactory.create(_stage_llm_cfg(
+            runtime,
+            "query_seed_llm_provider",
+            "query_seed_llm_model",
+            provider_fallback_keys=("utility_llm_provider",),
+            model_fallback_keys=("utility_llm_model",),
+        ))
+        compression_llm = LLMFactory.create(_stage_llm_cfg(
+            runtime,
+            "compression_llm_provider",
+            "compression_llm_model",
+            provider_fallback_keys=("llm_provider",),
+            model_fallback_keys=("llm_model",),
+        ))
 
         reranker = RerankerFactory.create(cfg)
         ctx_builder = ContextBuilder(
             overlap_threshold=policy.context_dedup_overlap_threshold
         )
         compressor = CompressorFactory.create(
-            cfg, generation_llm, compression_threshold=policy.context_compression_threshold
+            runtime,
+            compression_llm,
+            compression_threshold=policy.context_compression_threshold,
+            system_prompt=runtime.get("compression_llm_system_prompt", ""),
         )
 
         # Optional: semantic cache
@@ -212,20 +257,9 @@ class RAGServiceFactory:
         from infrastructure.adapters.query_intelligence import (
             LLMQueryRewriter, HyDEGenerator, QueryDecomposer,
         )
-        query_rewriter = LLMQueryRewriter(llm=utility_llm)
-        hyde_generator = HyDEGenerator(llm=utility_llm)
-        query_decomposer = QueryDecomposer(llm=utility_llm)
-
-        # Optional: ReAct tool router — use utility LLM (tool selection is simple instruction-following)
-        tool_router = None
-        try:
-            from infrastructure.adapters.tool_router import (
-                ReActToolRouter, CalculatorTool, DateTimeTool, CodeExecutorTool,
-            )
-            tools = [CalculatorTool(), DateTimeTool(), CodeExecutorTool()]
-            tool_router = ReActToolRouter(llm=utility_llm, tools=tools)
-        except Exception:
-            pass
+        query_rewriter = LLMQueryRewriter(llm=query_rewrite_llm)
+        hyde_generator = HyDEGenerator(llm=hyde_llm)
+        query_decomposer = QueryDecomposer(llm=query_decomposer_llm)
 
         # Optional: Redis client for token quota
         redis_client = None
@@ -239,7 +273,7 @@ class RAGServiceFactory:
         return QueryUseCase(
             embedding_service=embedding,
             vector_store=vector_store,
-            llm_service=generation_llm,
+            llm_service=None,
             document_repository=doc_repo,
             reranker=reranker,
             context_builder=ctx_builder,
@@ -247,10 +281,10 @@ class RAGServiceFactory:
             semantic_cache=cache,
             memory_service=memory,
             graph_service=graph,
+            query_seed_llm=query_seed_llm,
             query_rewriter=query_rewriter,
             hyde_generator=hyde_generator,
             query_decomposer=query_decomposer,
-            tool_router=tool_router,
             redis_client=redis_client,
             routing_policy=policy,
         )

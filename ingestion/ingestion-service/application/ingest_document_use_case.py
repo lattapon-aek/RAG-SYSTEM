@@ -114,6 +114,11 @@ class IngestPreviewResult:
     embedding_provider: str = "ollama"
     embedding_model: str = ""
     graph_extraction_mode: str = "unknown"
+    graph_extractor_backend: str = "unknown"
+    graph_system_prompt_source: str = "unknown"
+    graph_system_prompt_overridden: bool = False
+    graph_llm_provider: str = "unknown"
+    graph_llm_model: str = "unknown"
 
 
 class IngestDocumentUseCase:
@@ -322,6 +327,11 @@ class IngestDocumentUseCase:
         graph_payload = graph_payload or {}
         graph_ms = (time.monotonic() - t) * 1000
         graph_extraction_mode = str(graph_payload.get("extraction_mode", "unknown"))
+        graph_extractor_backend = str(graph_payload.get("graph_extractor_backend", os.getenv("GRAPH_EXTRACTOR_BACKEND", "llm")))
+        graph_system_prompt_source = str(graph_payload.get("graph_system_prompt_source", "unknown"))
+        graph_system_prompt_overridden = bool(graph_payload.get("graph_system_prompt_overridden", False))
+        graph_llm_provider = str(graph_payload.get("graph_provider", cfg["graph_llm_provider"]))
+        graph_llm_model = str(graph_payload.get("graph_model", cfg["graph_llm_model"]))
         stages.append(PreviewStage(
             stage="graph",
             fired=True,
@@ -335,9 +345,11 @@ class IngestDocumentUseCase:
                 "heuristic_blocks": graph_payload.get("heuristic_blocks", 0),
                 "llm_blocks": graph_payload.get("llm_blocks", 0),
                 "total_blocks": graph_payload.get("total_blocks", 0),
-                "graph_extractor_backend": os.getenv("GRAPH_EXTRACTOR_BACKEND", "llm"),
-                "graph_provider": cfg["graph_llm_provider"],
-                "graph_model": cfg["graph_llm_model"],
+                "graph_extractor_backend": graph_extractor_backend,
+                "graph_system_prompt_source": graph_system_prompt_source,
+                "graph_system_prompt_overridden": graph_system_prompt_overridden,
+                "graph_provider": graph_llm_provider,
+                "graph_model": graph_llm_model,
             },
         ))
 
@@ -436,6 +448,11 @@ class IngestDocumentUseCase:
             embedding_provider=cfg["embedding_provider"],
             embedding_model=cfg["embedding_model"],
             graph_extraction_mode=graph_extraction_mode,
+            graph_extractor_backend=graph_extractor_backend,
+            graph_system_prompt_source=graph_system_prompt_source,
+            graph_system_prompt_overridden=graph_system_prompt_overridden,
+            graph_llm_provider=graph_llm_provider,
+            graph_llm_model=graph_llm_model,
         )
 
     async def _trigger_graph_extraction(self, text: str, document_id: str,

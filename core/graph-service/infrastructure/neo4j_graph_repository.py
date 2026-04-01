@@ -25,6 +25,18 @@ _RELATION_PRIORITY = {
     "MENTIONS": 5,
 }
 
+_RELATION_PHRASE = {
+    "MEMBER_OF": "is a member of",
+    "PART_OF": "is part of",
+    "HAS_ROLE": "has role",
+    "REPORTS_TO": "reports to",
+    "WORKS_WITH": "works with",
+    "RESPONSIBLE_FOR": "is responsible for",
+    "GOOD_FOR": "is suitable for",
+    "ALIAS_OF": "is an alias of",
+    "MENTIONS": "mentions",
+}
+
 
 class Neo4jGraphRepository(IGraphRepository):
     """Neo4j implementation of IGraphRepository."""
@@ -553,10 +565,44 @@ class Neo4jGraphRepository(IGraphRepository):
 def _build_context_text(entities: List[Entity], relations: List[Relation]) -> str:
     if not entities:
         return ""
-    lines = ["### Knowledge Graph Context"]
+    lines = ["### Graph Summary"]
     entity_map = {e.id: e.name for e in entities}
-    for rel in relations:
-        src = entity_map.get(rel.source_entity_id, rel.source_entity_id)
-        tgt = entity_map.get(rel.target_entity_id, rel.target_entity_id)
-        lines.append(f"- {src} --[{rel.relation_type}]--> {tgt}")
+
+    label_order = ["PERSON", "ORG", "TEAM", "LOCATION", "CONCEPT"]
+    entities_by_label = defaultdict(list)
+    for entity in entities:
+        label = (entity.label or "CONCEPT").upper()
+        entities_by_label[label].append(entity.name)
+
+    lines.append("Entities:")
+    for label in label_order:
+        names = list(dict.fromkeys(entities_by_label.get(label, [])))
+        if not names:
+            continue
+        suffix = "" if len(names) <= 8 else f" … +{len(names) - 8}"
+        lines.append(f"- {label}: {', '.join(names[:8])}{suffix}")
+
+    if relations:
+        grouped: dict = defaultdict(list)
+        for rel in relations:
+            src = entity_map.get(rel.source_entity_id, rel.source_entity_id)
+            tgt = entity_map.get(rel.target_entity_id, rel.target_entity_id)
+            grouped[(src, rel.relation_type)].append(tgt)
+
+        lines.append("Relationships:")
+        scored_groups = sorted(
+            grouped.items(),
+            key=lambda item: (
+                -_RELATION_PRIORITY.get(item[0][1].upper(), 0),
+                str(item[0][0]).lower(),
+                str(item[0][1]).upper(),
+            ),
+        )
+        for (src, rel_type), targets in scored_groups[:12]:
+            unique_targets = list(dict.fromkeys(targets))
+            phrase = _RELATION_PHRASE.get(rel_type.upper(), "is related to")
+            suffix = "" if len(unique_targets) <= 3 else f" … +{len(unique_targets) - 3}"
+            target_text = ", ".join(unique_targets[:3])
+            lines.append(f"- {src} {phrase}: {target_text}{suffix}")
+
     return "\n".join(lines)

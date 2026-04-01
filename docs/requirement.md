@@ -10,7 +10,7 @@ This document summarizes the system requirements that are reflected in the curre
 - Job status, retry, cancel, reprocess, and queue statistics
 - Document version history and rollback
 - Document chunk inspection
-- Vector retrieval and RAG-style answer generation
+- Vector retrieval and RAG-style context brief assembly
 - Graph extraction and graph querying
 - Reranking support
 - Intelligence workflows for analysis, feedback, and self-learning
@@ -45,7 +45,7 @@ Use this quick map when you want to jump from a requirement to the code path tha
 | Requirement area | Read next |
 |---|---|
 | Document ingestion, preview, queue, status, retry, cancel, rollback, chunk inspection | [Ingestion walkthrough](ingestion-walkthrough.md) |
-| Vector retrieval, RAG answer generation, reranking, cache, memory, citation | [Query walkthrough](query-walkthrough.md) |
+| Vector retrieval, RAG context brief assembly, reranking, cache, memory, grounding | [Query walkthrough](query-walkthrough.md) |
 | Graph extraction and graph querying | [Ingestion walkthrough](ingestion-walkthrough.md) and [Query walkthrough](query-walkthrough.md) |
 | Intelligence workflows and background analysis | [Query walkthrough](query-walkthrough.md) |
 | Dashboard and MCP access | [Query walkthrough](query-walkthrough.md) and [Ingestion walkthrough](ingestion-walkthrough.md) |

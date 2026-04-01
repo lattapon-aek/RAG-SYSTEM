@@ -48,7 +48,7 @@ def make_interaction(confidence=0.3) -> InteractionRecord:
         query_length=50,
         answer_length=100,
         retrieval_latency_ms=10.0,
-        generation_latency_ms=20.0,
+        answer_latency_ms=20.0,
         total_latency_ms=30.0,
         confidence_score=confidence,
     )

@@ -33,6 +33,9 @@ class ExtractEntitiesUseCase:
         heuristic_blocks = int(getattr(self._extractor, "last_heuristic_blocks", 0) or 0)
         llm_blocks = int(getattr(self._extractor, "last_llm_blocks", 0) or 0)
         total_blocks = int(getattr(self._extractor, "last_total_blocks", 0) or 0)
+        graph_backend = str(getattr(self._extractor, "last_graph_backend", "unknown"))
+        graph_prompt_source = str(getattr(self._extractor, "last_graph_prompt_source", "unknown"))
+        graph_prompt_overridden = bool(getattr(self._extractor, "last_graph_prompt_overridden", False))
         validation = self._validate_graph_quality(text, entities, relations)
 
         graph_stored = False
@@ -62,6 +65,9 @@ class ExtractEntitiesUseCase:
             "heuristic_blocks": heuristic_blocks,
             "llm_blocks": llm_blocks,
             "total_blocks": total_blocks,
+            "graph_extractor_backend": graph_backend,
+            "graph_system_prompt_source": graph_prompt_source,
+            "graph_system_prompt_overridden": graph_prompt_overridden,
             "validation_status": validation["status"],
             "validation_issues": validation["issues"],
             "validation_summary": validation["summary"],

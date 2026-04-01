@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 type Mode = 'text' | 'web' | 'file'
 
@@ -41,6 +41,11 @@ type IngestPreviewResult = {
   embedding_provider: string
   embedding_model: string
   graph_extraction_mode: string
+  graph_extractor_backend: string
+  graph_system_prompt_source: string
+  graph_system_prompt_overridden: boolean
+  graph_llm_provider: string
+  graph_llm_model: string
 }
 
 type PipelineStatus = 'idle' | 'loading' | 'done'
@@ -279,8 +284,18 @@ function renderIngestNodeBody(
     const entityCount = preview?.graph_entities?.length ?? 0
     const relCount = preview?.graph_relations?.length ?? 0
     const membershipCount = (preview?.graph_relations ?? []).filter(r => ['MEMBER_OF', 'PART_OF'].includes(r.relation_type)).length
+    const roleCount = (preview?.graph_relations ?? []).filter(r => r.relation_type === 'HAS_ROLE').length
+    const goodForCount = (preview?.graph_relations ?? []).filter(r => r.relation_type === 'GOOD_FOR').length
     const validationStatus = preview?.validation_status ?? 'unknown'
     const validationIssues = preview?.validation_issues ?? []
+    const needsMembershipHint = validationIssues.some(issue =>
+      issue === 'team_document_without_membership_relations' || issue === 'sparse_membership_relations'
+    )
+    const graphBackend = preview?.graph_extractor_backend ?? 'llm'
+    const graphPromptSource = preview?.graph_system_prompt_source ?? 'unknown'
+    const graphPromptOverridden = preview?.graph_system_prompt_overridden ?? false
+    const graphProvider = preview?.graph_llm_provider ?? '—'
+    const graphModel = preview?.graph_llm_model ?? '—'
     return (
       <div className="space-y-2">
         <div className="flex items-baseline gap-2">
@@ -293,8 +308,17 @@ function renderIngestNodeBody(
         <StatGrid items={[
           { label: 'Relations', value: relCount },
           { label: 'Membership', value: membershipCount },
+          { label: 'Roles', value: roleCount },
+          { label: 'Good-for', value: goodForCount },
           { label: 'Latency',   value: ms(stage?.latency_ms) },
           { label: 'Mode',      value: preview?.graph_extraction_mode ?? '—' },
+        ]} />
+        <ConfigBlock items={[
+          { env: 'GRAPH_LLM_PROVIDER', value: graphProvider },
+          { env: 'GRAPH_LLM_MODEL', value: graphModel },
+          { env: 'GRAPH_EXTRACTOR_BACKEND', value: graphBackend },
+          { env: 'GRAPH_SYSTEM_PROMPT', value: graphPromptOverridden ? 'env override' : 'default few-shot' },
+          { env: 'GRAPH_PROMPT_SOURCE', value: graphPromptSource },
         ]} />
         {preview?.validation_summary && (
           <div className="bg-gray-800 rounded-lg px-2.5 py-2">
@@ -306,6 +330,11 @@ function renderIngestNodeBody(
                   <span key={issue} className="text-[9px] bg-amber-900/30 text-amber-300 px-1.5 py-0.5 rounded-full">{issue}</span>
                 ))}
               </div>
+            )}
+            {needsMembershipHint && (
+              <p className="mt-1 text-[10px] text-amber-200/90">
+                Tip: if you want Graph to connect team members more strongly, add one natural sentence that states the team membership explicitly, or keep the team heading close to the member lines.
+              </p>
             )}
           </div>
         )}
@@ -383,9 +412,66 @@ function PipelineDiagram({
   selectedId: string | null
   setSelectedId: (value: string | null) => void
 }) {
+  const diagramRef = useRef<HTMLDivElement | null>(null)
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties | null>(null)
   const active = new Set(preview?.stages.filter((s) => s.fired).map((s) => s.stage))
   const vm = Object.fromEntries(NODES.map((n) => [n.id, n]))
   const edgeOn = (a: string, b: string) => status === 'done' && active.has(a) && active.has(b)
+
+  useLayoutEffect(() => {
+    if (!selectedId || !preview || typeof window === 'undefined') {
+      setPopupStyle(null)
+      return
+    }
+
+    const node = vm[selectedId]
+    const container = diagramRef.current
+    if (!node || !container) {
+      setPopupStyle(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const rect = container.getBoundingClientRect()
+      const popupWidth = 256
+      const estimatedHeight = 280
+      const margin = 12
+      const centerX = rect.left + ((node.x + node.w / 2) / VW) * rect.width
+      const topY = rect.top + (node.y / VH) * rect.height
+      const bottomY = rect.top + ((node.y + node.h) / VH) * rect.height
+      const spaceAbove = topY - margin
+      const spaceBelow = window.innerHeight - bottomY - margin
+      const placeAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow
+      const popupHeight = placeAbove
+        ? Math.max(160, Math.min(estimatedHeight, spaceAbove))
+        : Math.max(160, Math.min(estimatedHeight, spaceBelow))
+      const top = placeAbove
+        ? Math.max(margin, topY - popupHeight - 8)
+        : Math.min(window.innerHeight - margin - popupHeight, bottomY + 8)
+      const left = centerX < rect.left + rect.width * 0.35
+        ? Math.max(margin, Math.min(centerX, window.innerWidth - popupWidth - margin))
+        : centerX > rect.left + rect.width * 0.65
+          ? Math.max(margin, Math.min(centerX - popupWidth, window.innerWidth - popupWidth - margin))
+          : Math.max(margin, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - margin))
+
+      setPopupStyle({
+        position: 'fixed',
+        left,
+        top,
+        width: popupWidth,
+        maxHeight: `min(${estimatedHeight}px, calc(100vh - 24px))`,
+        overflowY: 'auto',
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [preview, selectedId])
 
   const bez = (a: string, b: string) => {
     const na = vm[a], nb = vm[b]
@@ -400,7 +486,7 @@ function PipelineDiagram({
 
   return (
     <div>
-      <div className="relative w-full" style={{ aspectRatio: `${VW}/${VH}` }}>
+      <div ref={diagramRef} className="relative w-full overflow-visible" style={{ aspectRatio: `${VW}/${VH}` }}>
         <svg viewBox={`0 0 ${VW} ${VH}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
           <defs>
             <filter id="ingest-glow" x="-40%" y="-40%" width="180%" height="180%">
@@ -500,7 +586,7 @@ function PipelineDiagram({
 
         {/* Click-away backdrop */}
         {selectedId && (
-          <div className="absolute inset-0 z-10" onClick={() => setSelectedId(null)} />
+          <div className="fixed inset-0 z-10" onClick={() => setSelectedId(null)} />
         )}
 
         {/* Floating popup */}
@@ -509,28 +595,22 @@ function PipelineDiagram({
           if (!node) return null
           const stage = preview.stages.find((s) => s.stage === selectedId)
           const on = stage?.fired ?? false
-          const nodeCenterX = node.x + node.w / 2
-          const leftPct = (nodeCenterX / VW) * 100
-          const xAlign: React.CSSProperties =
-            nodeCenterX < VW * 0.35
-              ? { left: `${leftPct}%`, transform: 'translateX(0)' }
-              : nodeCenterX > VW * 0.65
-                ? { left: `${leftPct}%`, transform: 'translateX(-100%)' }
-                : { left: `${leftPct}%`, transform: 'translateX(-50%)' }
-          const showBelow = node.y < VH * 0.55
-          const yAlign: React.CSSProperties = showBelow
-            ? { top: `${((node.y + node.h + 8) / VH) * 100}%` }
-            : { bottom: `${((VH - node.y + 8) / VH) * 100}%` }
 
           return (
             <div
-              className="absolute z-20 w-64 rounded-xl border shadow-2xl p-3 text-xs"
+              className="z-20 w-64 rounded-xl border shadow-2xl p-3 text-xs overflow-y-auto"
               style={{
                 background: '#0c0c12',
                 borderColor: '#2d2d3d',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
-                ...xAlign,
-                ...yAlign,
+                maxHeight: 'min(280px, calc(100vh - 24px))',
+                transform:
+                  node.x + node.w / 2 < VW * 0.35
+                    ? 'translateX(0)'
+                    : node.x + node.w / 2 > VW * 0.65
+                      ? 'translateX(-100%)'
+                      : 'translateX(-50%)',
+                ...(popupStyle ?? {}),
               }}
               onClick={(e) => e.stopPropagation()}
             >

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def _get_model() -> IRerankerModel:
-    backend = os.getenv("RERANKER_BACKEND", "bge").lower()
+    backend = os.getenv("RERANKER_BACKEND", "llm").lower()
     device = os.getenv("RERANKER_DEVICE", "cpu")
 
     if backend == "cohere":
@@ -32,22 +32,26 @@ def _get_model() -> IRerankerModel:
 
     if backend == "llm":
         from infrastructure.llm_reranker import LLMRerankerModel
-        llm_url = os.getenv("LLM_RERANKER_URL", os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"))
-        llm_model = os.getenv("LLM_RERANKER_MODEL", os.getenv("OLLAMA_LLM_MODEL", "qwen3:0.6b"))
+        llm_url = os.getenv("LLM_RERANKER_URL", os.getenv("TYPHOON_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")))
+        llm_model = os.getenv("LLM_RERANKER_MODEL", os.getenv("TYPHOON_MODEL", os.getenv("OLLAMA_LLM_MODEL", "qwen3:0.6b")))
+        llm_api_key = os.getenv("LLM_RERANKER_API_KEY", os.getenv("TYPHOON_API_KEY", os.getenv("OPENAI_API_KEY", "")))
         max_cands = int(os.getenv("LLM_RERANKER_MAX_CANDIDATES", "8"))
         logger.info("Using LLM reranker: %s @ %s", llm_model, llm_url)
-        return LLMRerankerModel(base_url=llm_url, model=llm_model, max_candidates=max_cands)
+        return LLMRerankerModel(base_url=llm_url, model=llm_model, max_candidates=max_cands, api_key=llm_api_key)
 
     if backend == "noop":
         from infrastructure.noop_reranker import NoOpReranker
         logger.info("Using NoOp reranker (pass-through)")
         return NoOpReranker()
 
-    # Default: BGE
-    from infrastructure.bge_reranker import BGERerankerModel
-    model_name = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
-    logger.info("Using BGE reranker: %s on %s", model_name, device)
-    return BGERerankerModel(model_name=model_name, device=device)
+    # Default: LLM
+    from infrastructure.llm_reranker import LLMRerankerModel
+    llm_url = os.getenv("LLM_RERANKER_URL", os.getenv("TYPHOON_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")))
+    llm_model = os.getenv("LLM_RERANKER_MODEL", os.getenv("TYPHOON_MODEL", os.getenv("OLLAMA_LLM_MODEL", "qwen3:0.6b")))
+    llm_api_key = os.getenv("LLM_RERANKER_API_KEY", os.getenv("TYPHOON_API_KEY", os.getenv("OPENAI_API_KEY", "")))
+    max_cands = int(os.getenv("LLM_RERANKER_MAX_CANDIDATES", "8"))
+    logger.info("Using default LLM reranker: %s @ %s", llm_model, llm_url)
+    return LLMRerankerModel(base_url=llm_url, model=llm_model, max_candidates=max_cands, api_key=llm_api_key)
 
 
 @lru_cache(maxsize=1)

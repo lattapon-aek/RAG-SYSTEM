@@ -1,7 +1,7 @@
 """
 QueryUseCase — orchestrates the full RAG query pipeline:
 Cache → Memory → Query Intelligence → Parallel Retrieval (Vector + Graph)
-→ RRF Merge → Reranker → Context Builder → Compressor → LLM → Answer + Citations
+→ RRF Merge → Reranker → Context Builder → Compressor → Answer + Citations
 """
 import asyncio
 import json
@@ -27,9 +27,8 @@ from application.ports.i_query_decomposer import IQueryDecomposer
 from application.ports.i_semantic_cache import ISemanticCache
 from application.ports.i_memory_service import IMemoryService
 from application.ports.i_logger import ILogger
-from application.ports.i_tool_router import IToolRouter
 from domain.entities import (
-    QueryResult, Citation, RerankedResult, QueryIntelligenceResult,
+    QueryResult, Citation, RerankedResult, QueryIntelligenceResult, BuiltContext,
 )
 from domain.errors import EmptyQueryError, QueryTimeoutError, QuotaExceededError
 from application.context_builder import ContextBuilder
@@ -44,33 +43,36 @@ logger = logging.getLogger(__name__)
 
 _QUERY_TIMEOUT = float(os.getenv("QUERY_TIMEOUT", "300"))  # seconds (300s for CPU Ollama)
 
-_ANSWER_SYSTEM_PROMPT = (
-    "/no_think You are a precise answer generator for an upstream agent. "
-    "Use ONLY the provided context. Answer the user's question directly and clearly. "
-    "Lead with the conclusion or exact answer first, then add only the facts needed to support it. "
-    "Do not restate the question, add filler, or wander into background unless it is required to answer correctly. "
-    "If the context contains multiple relevant facts, organize them with short bullets or a compact list. "
-    "If the context is ambiguous, say what is missing or ambiguous instead of guessing. "
-    "Always output in this exact structure:\n"
-    "Answer: <one direct answer>\n"
-    "Facts:\n"
-    "- <fact 1>\n"
-    "- <fact 2>\n"
-    "Evidence:\n"
-    "- <document_id> / <chunk_id>\n"
-    "Missing:\n"
-    "- <what is missing or 'none'>\n"
-    "Next:\n"
-    "- <recommended next action or 'use_as_final'>\n"
-    "Keep each line short. Do not add extra sections.\n"
-    "If the context does not contain enough information, reply exactly: "
-    "'I don't have enough information to answer this question.'"
+_DEFAULT_GRAPH_QUERY_SEED_SYSTEM_PROMPT = (
+    "/no_think You extract graph seed entities from a user query. "
+    "Return ONLY valid JSON with one key: seeds. "
+    "The value must be an array of 0-3 strings. "
+    "Choose only the smallest canonical graph entities needed to answer the query. "
+    "Prefer exactly one seed when one entity is enough. "
+    "Use person names, organization names, aliases, or acronyms only when they are directly relevant. "
+    "Do not include filler words, question words, verbs, punctuation, or the query text itself. "
+    "For Thai queries without spaces, extract only the entity span, not the surrounding phrase. "
+    "Do not return both a canonical name and its alias unless both are independently needed."
 )
 
-_ANSWER_PROMPT = (
-    "Context:\n{context}\n\n"
-    "Question: {query}\n\n"
-    "Answer the question using only the context. Fill the structure exactly."
+_GRAPH_QUERY_SEED_SYSTEM_PROMPT = os.getenv(
+    "GRAPH_QUERY_SEED_SYSTEM_PROMPT",
+    _DEFAULT_GRAPH_QUERY_SEED_SYSTEM_PROMPT,
+)
+_GRAPH_QUERY_SEED_MAX_TOKENS = int(os.getenv("GRAPH_QUERY_SEED_MAX_TOKENS", "512"))
+
+_GRAPH_QUERY_SEED_PROMPT = (
+    "Extract graph seed entities from this query.\n"
+    "Return JSON only in this exact shape:\n"
+    "{{\"seeds\": [\"<seed 1>\", \"<seed 2>\"]}}\n\n"
+    "Rules:\n"
+    "- Keep seeds short, canonical, and non-redundant.\n"
+    "- Return exactly one seed when the query clearly asks about a single entity.\n"
+    "- Preserve multiple seeds when the query clearly references more than one entity or asks about a relationship between them.\n"
+    "- Do not include filler words, question words, verbs, or surrounding query text.\n"
+    "- Do not return both a canonical name and its alias unless both are independently needed.\n"
+    "- If nothing useful is present, return {{\"seeds\": []}}.\n\n"
+    "Query: {query}"
 )
 
 
@@ -107,7 +109,6 @@ class QueryRequest:
     use_rewrite: bool = False
     use_decompose: bool = False
     use_graph: bool = True
-    use_tools: bool = False
 
     @property
     def effective_namespaces(self) -> List[str]:
@@ -123,6 +124,12 @@ class QueryRequest:
 
 
 class QueryUseCase:
+    _GRAPH_QUERY_STOPWORDS = {
+        "ใคร", "อะไร", "ที่ไหน", "เมื่อไร", "ทำไม", "อย่างไร",
+        "who", "what", "where", "when", "why", "how",
+        "query", "question",
+    }
+
     @staticmethod
     def _resolve_client_id(request: QueryRequest) -> str:
         return request.client_id or request.user_id or "anonymous"
@@ -134,28 +141,272 @@ class QueryUseCase:
             return []
 
         seeds: List[str] = []
-
-        team_match = re.search(
-            r"(?:\bทีม\b|\bteam\b)\s+([A-Za-z0-9ก-๙_.\-/ ]{2,80})",
-            cleaned,
-            flags=re.IGNORECASE,
-        )
-        if team_match:
-            team_tail = team_match.group(1).strip()
-            team_name = re.sub(
-                r"\s+(?:มี|ได้แก่|คือ|เป็น|รับผิดชอบ|ดูแล|ทำหน้าที่|ของ|ที่|ซึ่ง|และ|โดย)\b.*$",
-                "",
-                team_tail,
-                flags=re.IGNORECASE,
-            ).strip(" ,.;:，。")
-            if team_name:
-                seeds.append(team_name)
+        marker_hit = False
 
         for token in re.findall(r"\b[A-Z]{2,}\b", cleaned):
             if token not in seeds:
                 seeds.append(token)
 
+        compact = re.sub(r"\s+", "", cleaned)
+        if compact:
+            for marker in ("เป็นใคร", "คือใคร", "เป็นอะไร", "คืออะไร", "ใครเป็น"):
+                if marker in compact:
+                    prefix = compact.split(marker, 1)[0].strip(" ,.;:，。")
+                    if (
+                        prefix
+                        and prefix.lower() not in QueryUseCase._GRAPH_QUERY_STOPWORDS
+                        and len(prefix) <= 24
+                        and not re.search(r"(เป็น|คือ|ทำงาน|ร่วม|อยู่|มี|ทำหน้าที่|วิเคราะห์|วางแผน|จัดสรร|ตัดสินใจ|กับ)", prefix)
+                    ):
+                        seeds.append(prefix)
+                    marker_hit = True
+                    break
+
+        if compact and not marker_hit and len(cleaned.split()) == 1 and compact.lower() not in QueryUseCase._GRAPH_QUERY_STOPWORDS:
+            if (
+                re.search(r"[A-Za-zก-๙]", compact)
+                and not re.search(r"(เป็น|คือ|ทำงาน|ร่วม|อยู่|มี|ทำหน้าที่|วิเคราะห์|วางแผน|จัดสรร|ตัดสินใจ|กับ|และ|ระหว่าง|เปรียบเทียบ|เทียบ)", compact)
+            ):
+                seeds.append(compact)
+
         return list(dict.fromkeys(seeds))
+
+    @staticmethod
+    def _query_looks_like_multi_entity(query: str) -> bool:
+        normalized = re.sub(r"\s+", " ", query).strip().lower()
+        if not normalized:
+            return False
+        compact = normalized.replace(" ", "")
+        multi_markers = (
+            "และ",
+            "กับ",
+            "ร่วมกับ",
+            "คู่กับ",
+            "ระหว่าง",
+            "เปรียบเทียบ",
+            "เทียบกับ",
+            "versus",
+            "compare",
+            "vs",
+        )
+        if any(marker in normalized for marker in multi_markers):
+            return True
+        if any(marker in compact for marker in ("เทียบกับ", "เปรียบเทียบ", "ระหว่าง")):
+            return True
+        return False
+
+    @staticmethod
+    def _query_looks_like_single_lookup(query: str) -> bool:
+        normalized = re.sub(r"\s+", "", query).strip().lower()
+        if not normalized:
+            return False
+        single_markers = ("เป็นใคร", "คือใคร", "เป็นอะไร", "คืออะไร", "ใครเป็น", "ใครคือ")
+        return any(marker in normalized for marker in single_markers)
+
+    @staticmethod
+    def _clean_graph_seed(value: str) -> str:
+        cleaned = re.sub(r"\s+", " ", value).strip(" \t\r\n,.;:。，'\"`")
+        cleaned = re.sub(r"\s+(?:ครับ|ค่ะ|คะ|จ้ะ|นะ)$", "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip()
+
+    @classmethod
+    def _canonical_graph_seeds(cls, query: str, seeds: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        for seed in seeds:
+            canonical = cls._clean_graph_seed(seed)
+            if canonical and canonical.lower() not in cls._GRAPH_QUERY_STOPWORDS:
+                cleaned.append(canonical)
+        deduped = list(dict.fromkeys(cleaned))
+        if len(deduped) <= 1:
+            return deduped
+        if cls._query_looks_like_single_lookup(query) and not cls._query_looks_like_multi_entity(query):
+            return [deduped[0]]
+        return deduped[:3]
+
+    @staticmethod
+    def _assemble_context_text(query: str,
+                               context: BuiltContext,
+                               memory_context: str = "",
+                               graph_entity_texts: Optional[List[str]] = None,
+                               graph_relation_texts: Optional[List[str]] = None,
+                               graph_context_texts: Optional[List[str]] = None) -> str:
+        def _clip(text: str, limit: int = 220) -> str:
+            compact = re.sub(r"\s+", " ", text).strip()
+            if len(compact) <= limit:
+                return compact
+            return compact[:limit - 1].rstrip() + "…"
+
+        sections: List[str] = []
+        sections.append(f"[Query]\n{query}")
+        sections.append("[Scope]\nUse only the structured context below. Do not infer missing facts.")
+
+        trusted_facts: List[str] = []
+        for line in (memory_context or "").splitlines():
+            item = line.strip()
+            if item:
+                trusted_facts.append(f"- {item}")
+        for chunk in context.chunks[:6]:
+            snippet = _clip(chunk.text)
+            if not snippet:
+                continue
+            trusted_facts.append(f"- {snippet}")
+        trusted_facts = list(dict.fromkeys(trusted_facts))
+        sections.append("[Trusted Facts]\n" + ("\n".join(trusted_facts[:4]) if trusted_facts else "- None"))
+
+        graph_summary: List[str] = []
+        for line in graph_context_texts or []:
+            item = _clip(line, limit=220)
+            if item:
+                graph_summary.append(f"- {item}")
+        graph_summary = list(dict.fromkeys(graph_summary))
+        if graph_summary:
+            sections.append("[Graph Summary]\n" + "\n".join(graph_summary[:4]))
+        else:
+            unique_entities = list(dict.fromkeys(graph_entity_texts or []))
+            entities_section = "\n".join(
+                f"- {item}" for item in unique_entities[:6]
+            ) if unique_entities else "- None"
+            sections.append("[Entities / Actors]\n" + entities_section)
+
+            relationship_lines = list(dict.fromkeys(graph_relation_texts or []))
+            relationships_section = "\n".join(relationship_lines[:4]) if relationship_lines else "- None"
+            sections.append("[Relationships / Connections]\n" + relationships_section)
+
+        return "\n\n".join(section for section in sections if section.strip())
+
+    @staticmethod
+    def _compression_context_from_text(context_text: str, was_truncated: bool) -> BuiltContext:
+        assembled_chunk = RerankedResult(
+            chunk_id="assembled_context",
+            document_id="context",
+            text=context_text,
+            score=1.0,
+            original_rank=0,
+            reranked_rank=0,
+        )
+        return BuiltContext(
+            chunks=[assembled_chunk],
+            total_tokens=max(1, len(context_text.split())),
+            was_truncated=was_truncated,
+        )
+
+    @staticmethod
+    def _normalize_graph_payload(payload: object) -> tuple[List[dict], List[dict], str]:
+        if not isinstance(payload, dict):
+            return [], [], ""
+        entities = payload.get("entities", []) or []
+        relations = payload.get("relations", []) or []
+        context_text = payload.get("context_text", "") or ""
+        normalized_entities: List[dict] = []
+        for entity in entities:
+            if isinstance(entity, dict):
+                normalized_entities.append({
+                    "name": entity.get("name", ""),
+                    "type": entity.get("type", entity.get("label", "")),
+                })
+            else:
+                normalized_entities.append({"name": str(entity), "type": ""})
+        normalized_relations: List[dict] = []
+        for relation in relations:
+            if isinstance(relation, dict):
+                normalized_relations.append({
+                    "source": relation.get("source", relation.get("source_entity", "")),
+                    "target": relation.get("target", relation.get("target_entity", "")),
+                    "relation_type": relation.get("relation_type", relation.get("type", "RELATED_TO")),
+                })
+        return normalized_entities, normalized_relations, str(context_text).strip()
+
+    @staticmethod
+    def _graph_relation_lines(relations: List[dict]) -> List[str]:
+        relation_phrases = {
+            "MEMBER_OF": "is a member of",
+            "PART_OF": "is part of",
+            "HAS_ROLE": "has role",
+            "REPORTS_TO": "reports to",
+            "WORKS_WITH": "works with",
+            "RESPONSIBLE_FOR": "is responsible for",
+            "GOOD_FOR": "is suitable for",
+            "ALIAS_OF": "is an alias of",
+            "RELATED_TO": "is related to",
+        }
+        lines: List[str] = []
+        for rel in relations:
+            src = str(rel.get("source", "")).strip()
+            tgt = str(rel.get("target", "")).strip()
+            rel_type = str(rel.get("relation_type", "RELATED_TO")).strip()
+            if not src and not tgt:
+                continue
+            phrase = relation_phrases.get(rel_type.upper(), "is related to")
+            if src and tgt:
+                lines.append(f"- {src} {phrase} {tgt}")
+            elif src:
+                lines.append(f"- {src} {phrase} Unknown")
+            else:
+                lines.append(f"- Unknown {phrase} {tgt}")
+        return lines
+
+    @classmethod
+    def _parse_graph_seed_response(cls, raw: str) -> List[str]:
+        text = (raw or "").strip()
+        if not text:
+            return []
+
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+
+        payload = None
+        try:
+            payload = json.loads(text)
+        except Exception:
+            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+            if match:
+                try:
+                    payload = json.loads(match.group(0))
+                except Exception:
+                    payload = None
+
+        if isinstance(payload, dict):
+            raw_seeds = payload.get("seeds", [])
+        elif isinstance(payload, list):
+            raw_seeds = payload
+        else:
+            return []
+
+        seeds: List[str] = []
+        for item in raw_seeds:
+            if not isinstance(item, str):
+                continue
+            cleaned = cls._clean_graph_seed(item)
+            if not cleaned or cleaned.lower() in cls._GRAPH_QUERY_STOPWORDS:
+                continue
+            seeds.append(cleaned)
+            if len(seeds) >= 5:
+                break
+        return list(dict.fromkeys(seeds))
+
+    async def resolve_graph_seed_names(self, query: str) -> List[str]:
+        """LLM-first graph seed extraction with conservative heuristic fallback."""
+        llm_seeds: List[str] = []
+        try:
+            raw = await self._query_seed_llm.generate(
+                _GRAPH_QUERY_SEED_PROMPT.format(query=query),
+                system_prompt=_GRAPH_QUERY_SEED_SYSTEM_PROMPT,
+                max_tokens=_GRAPH_QUERY_SEED_MAX_TOKENS,
+            )
+            llm_seeds = self._parse_graph_seed_response(raw)
+        except Exception as exc:
+            logger.warning("Graph seed extraction LLM failed: %s", exc)
+
+        heuristic_seeds = self._extract_graph_seed_names(query)
+        if llm_seeds:
+            heuristic_extras = [seed for seed in heuristic_seeds if seed not in llm_seeds]
+            merged = list(dict.fromkeys(llm_seeds + heuristic_extras))
+            merged = self._canonical_graph_seeds(query, merged)
+            self._last_graph_seed_source = "llm+heuristic" if heuristic_extras else "llm"
+            self._last_graph_seed_strategy = "llm-first"
+            return merged
+        self._last_graph_seed_source = "heuristic" if heuristic_seeds else "empty"
+        self._last_graph_seed_strategy = "heuristic-fallback" if heuristic_seeds else "none"
+        return self._canonical_graph_seeds(query, heuristic_seeds)
 
     async def _retrieve_one_namespace(
         self,
@@ -173,7 +424,7 @@ class QueryUseCase:
         graph_entity_names = (
             graph_entity_names
             if graph_entity_names is not None
-            else self._extract_graph_seed_names(retrieval_query)
+            else await self.resolve_graph_seed_names(retrieval_query)
         )
         graph_task = (
             self._graph.query_related_entities(
@@ -191,8 +442,8 @@ class QueryUseCase:
             vecs = []
         if isinstance(ents, Exception):
             logger.warning("Graph query failed for namespace=%s: %s", namespace, ents)
-            ents = []
-        return vecs or [], ents or []
+            ents = {"entities": [], "relations": [], "context_text": ""}
+        return vecs or [], ents or {"entities": [], "relations": [], "context_text": ""}
 
     def __init__(
         self,
@@ -206,18 +457,17 @@ class QueryUseCase:
         semantic_cache: Optional[ISemanticCache] = None,
         memory_service: Optional[IMemoryService] = None,
         graph_service: Optional[IGraphService] = None,
+        query_seed_llm: Optional[ILLMService] = None,
         query_rewriter: Optional[IQueryRewriter] = None,
         hyde_generator: Optional[IHyDEGenerator] = None,
         query_decomposer: Optional[IQueryDecomposer] = None,
         app_logger: Optional[ILogger] = None,
-        tool_router: Optional[IToolRouter] = None,
         citation_verifier: Optional[CitationVerifier] = None,
         redis_client=None,
         routing_policy: Optional[RoutingPolicy] = None,
     ):
         self._embed = embedding_service
         self._vector_store = vector_store
-        self._llm = llm_service
         self._doc_repo = document_repository
         self._reranker = reranker
         self._ctx_builder = context_builder
@@ -225,11 +475,11 @@ class QueryUseCase:
         self._cache = semantic_cache
         self._memory = memory_service
         self._graph = graph_service
+        self._query_seed_llm = query_seed_llm or llm_service
         self._rewriter = query_rewriter
         self._hyde = hyde_generator
         self._decomposer = query_decomposer
         self._log = app_logger
-        self._tool_router = tool_router
         self._policy = routing_policy or RoutingPolicy.from_env()
         self._citation_verifier = citation_verifier or CitationVerifier(
             grounding_threshold=self._policy.grounding_threshold,
@@ -238,6 +488,8 @@ class QueryUseCase:
         self._redis = redis_client
         self._intelligence_url = os.getenv("INTELLIGENCE_SERVICE_URL", "http://intelligence-service:8003")
         self._intelligence_breaker = get_breaker("intelligence", redis_client=redis_client)
+        self._last_graph_seed_source = "empty"
+        self._last_graph_seed_strategy = "none"
 
     async def execute(self, request: QueryRequest) -> QueryResult:
         query = request.query.strip()
@@ -323,7 +575,9 @@ class QueryUseCase:
 
         # Parallel retrieval (all namespaces in parallel)
         retrieval_embedding = await self._embed.embed(embed_query)
-        graph_seed_names = self._extract_graph_seed_names(retrieval_query)
+        graph_seed_names = await self.resolve_graph_seed_names(retrieval_query)
+        graph_seed_source = self._last_graph_seed_source
+        graph_seed_strategy = self._last_graph_seed_strategy
         ns_tasks = [
             self._retrieve_one_namespace(
                 retrieval_embedding, retrieval_query, ns,
@@ -334,7 +588,7 @@ class QueryUseCase:
         ns_results = await asyncio.gather(*ns_tasks, return_exceptions=True)
 
         all_vector_lists: List[List[RerankedResult]] = []
-        all_graph_entities_raw: list = []
+        all_graph_payloads: List[dict] = []
         for ns, res in zip(request.effective_namespaces, ns_results):
             if isinstance(res, Exception):
                 logger.error("Retrieval failed for namespace=%s: %s", ns, res)
@@ -342,7 +596,10 @@ class QueryUseCase:
             vecs, ents = res
             if vecs:
                 all_vector_lists.append(vecs)
-            all_graph_entities_raw.extend(ents)
+            if isinstance(ents, dict):
+                all_graph_payloads.append(ents)
+            else:
+                all_graph_payloads.append({"entities": ents or [], "relations": [], "context_text": ""})
 
         if len(all_vector_lists) > 1:
             vector_results = rrf_merge(all_vector_lists, top_n=request.top_k)
@@ -354,20 +611,35 @@ class QueryUseCase:
         # Graph results → RerankedResult (deduplicated)
         graph_results: List[RerankedResult] = []
         graph_entities: List[dict] = []
+        graph_summary_texts: List[str] = []
+        graph_relations: List[dict] = []
         graph_entity_texts: List[str] = []
+        graph_relation_texts: List[str] = []
+        graph_context_texts: List[str] = []
         seen_graph: set = set()
-        for i, entity in enumerate(all_graph_entities_raw):
-            payload = _graph_entity_payload(entity)
-            text = payload["name"]
-            if text in seen_graph:
-                continue
-            seen_graph.add(text)
-            graph_entities.append(payload)
-            graph_entity_texts.append(text)
-            graph_results.append(RerankedResult(
-                chunk_id=f"graph_{i}", document_id="graph", text=text,
-                score=1.0 / (i + 1), original_rank=i, reranked_rank=i,
-            ))
+        for payload in all_graph_payloads:
+            entities, relations, context_text = self._normalize_graph_payload(payload)
+            graph_context_texts.extend([context_text] if context_text else [])
+            for entity in entities:
+                text = entity.get("name", "")
+                if not text or text in seen_graph:
+                    continue
+                seen_graph.add(text)
+                graph_entities.append(entity)
+                entity_type = str(entity.get("type", "")).strip()
+                graph_entity_texts.append(f"{text} ({entity_type})" if entity_type else text)
+                graph_results.append(RerankedResult(
+                    chunk_id=f"graph_{len(graph_results)}",
+                    document_id="graph",
+                    text=text,
+                    score=1.0 / (len(graph_results) + 1),
+                    original_rank=len(graph_results),
+                    reranked_rank=len(graph_results),
+                ))
+            for rel in relations:
+                graph_relations.append(rel)
+        graph_relation_texts = self._graph_relation_lines(graph_relations)
+        graph_summary_texts = list(dict.fromkeys(graph_context_texts))
 
         # RRF merge (vector + graph)
         all_lists = [r for r in [vector_results, graph_results] if r]
@@ -404,83 +676,47 @@ class QueryUseCase:
         context = await self._ctx_builder.build(
             retrieval_query, reranked, max_tokens=request.max_context_tokens,
         )
-        if context.was_truncated:
+        context_text = self._assemble_context_text(
+            retrieval_query,
+            context,
+            memory_context,
+            graph_entity_texts,
+            graph_relation_texts,
+            graph_context_texts,
+        )
+        if context.was_truncated or not isinstance(self._compressor, NoOpCompressor):
             compressed = await self._compressor.compress(
-                retrieval_query, context, max_tokens=request.max_context_tokens
+                retrieval_query,
+                self._compression_context_from_text(context_text, context.was_truncated),
+                max_tokens=request.max_context_tokens
             )
             context_text = compressed.text
-        else:
-            context_text = "\n\n".join(c.text for c in context.chunks)
+        # For retrieve-only mode, keep the final assembled brief as the answer text.
 
-        if memory_context:
-            context_text = f"[User Memory]\n{memory_context}\n\n[Knowledge]\n{context_text}"
-
-        if graph_entity_texts:
-            context_text += f"\n\n[Related Entities]\n{', '.join(graph_entity_texts)}"
-
-        # Tool routing
-        stream_tool_calls: list = []
-        if self._tool_router and request.use_tools:
-            try:
-                stream_tool_calls = await self._tool_router.route(query, "")
-                if stream_tool_calls:
-                    tool_results = "\n".join(
-                        f"[{tc.tool_name}] {tc.output}" for tc in stream_tool_calls
-                    )
-                    context_text = f"[Tool Results]\n{tool_results}\n\n{context_text}"
-            except Exception as exc:
-                logger.warning("Tool router failed: %s", exc)
-
-        # ── Phase 2: Streaming LLM generation ──
+        # ── Phase 2: Streaming retrieve-only answer ──
         t_gen = time.monotonic()
         answer_parts: List[str] = []
 
-        kb_relevant_stream = top_score >= self._policy.knowledge_gap_threshold
-        _DIRECT_TOOLS = {"direct_answer", "datetime", "calculator", "code_executor"}
-        stream_direct_only = (
-            stream_tool_calls
-            and len(stream_tool_calls) == 1
-            and stream_tool_calls[0].tool_name in _DIRECT_TOOLS
-            and not kb_relevant_stream
-        )
-        if stream_direct_only:
-            no_info = str(stream_tool_calls[0].output)
-            yield _sse_event("token", {"content": no_info})
-            answer_parts.append(no_info)
-        elif not context.chunks and not stream_tool_calls:
+        if not context_text.strip():
             no_info = "I don't have enough information to answer this question."
             yield _sse_event("token", {"content": no_info})
             answer_parts.append(no_info)
         else:
-            if stream_tool_calls and not kb_relevant_stream:
-                gen_ctx = "\n".join(f"[{tc.tool_name}] {tc.output}" for tc in stream_tool_calls)
-            else:
-                gen_ctx = context_text
-            prompt = _ANSWER_PROMPT.format(context=gen_ctx, query=query)
-            try:
-                async for token in self._llm.generate_stream(
-                    prompt,
-                    system_prompt=_ANSWER_SYSTEM_PROMPT,
-                ):
-                    yield _sse_event("token", {"content": token})
-                    answer_parts.append(token)
-            except asyncio.CancelledError:
-                return  # Client disconnected
+            answer_text = context_text
+            for line in answer_text.splitlines(keepends=True):
+                if not line:
+                    continue
+                yield _sse_event("token", {"content": line})
+                answer_parts.append(line)
 
         answer = "".join(answer_parts)
-        generation_latency_ms = (time.monotonic() - t_gen) * 1000
+        answer_latency_ms = (time.monotonic() - t_gen) * 1000
 
         # Citation verification
         verification: Optional[CitationVerificationResult] = None
         if context.chunks and self._citation_verifier:
             verification = self._citation_verifier.verify(answer, reranked, query)
             if verification.low_confidence:
-                warning = (
-                    f"\n\n[Note: This answer has low grounding confidence "
-                    f"({verification.grounding_score:.0%}) and may contain unsupported claims.]"
-                )
-                yield _sse_event("token", {"content": warning})
-                answer += warning
                 asyncio.create_task(
                     self._enqueue_low_confidence(request_id, query, answer,
                                                  verification.grounding_score)
@@ -522,10 +758,14 @@ class QueryUseCase:
             "hyde_used": intel.hyde_used,
             "sub_queries": intel.sub_queries,
             "retrieval_latency_ms": retrieval_latency_ms,
-            "generation_latency_ms": generation_latency_ms,
+            "answer_latency_ms": answer_latency_ms,
             "total_latency_ms": total_latency_ms,
             "grounding_score": grounding_score,
             "low_confidence": low_confidence,
+            "graph_seed_names": graph_seed_names,
+            "graph_seed_source": graph_seed_source,
+            "graph_seed_strategy": graph_seed_strategy,
+            "graph_summary_texts": graph_summary_texts,
         })
 
         # Cache + log in background
@@ -534,14 +774,18 @@ class QueryUseCase:
             answer=answer,
             citations=citations,
             graph_entities=graph_entities,
+            graph_summary_texts=graph_summary_texts,
             rewritten_query=intel.rewritten_query if intel.rewritten_query != query else None,
             hyde_used=intel.hyde_used,
             sub_queries=intel.sub_queries,
             from_cache=False,
             retrieval_latency_ms=retrieval_latency_ms,
-            generation_latency_ms=generation_latency_ms,
+            answer_latency_ms=answer_latency_ms,
             grounding_score=grounding_score,
             low_confidence=low_confidence,
+            graph_seed_names=graph_seed_names,
+            graph_seed_source=graph_seed_source,
+            graph_seed_strategy=graph_seed_strategy,
         )
         if self._cache and request.use_cache and citations:
             asyncio.create_task(self._cache.set(query_embedding, result, namespace=request.cache_namespace_key))
@@ -625,28 +869,33 @@ class QueryUseCase:
 
         # 5. Parallel retrieval: vector + graph (all namespaces in parallel)
         retrieval_embedding = await self._embed.embed(embed_query)
-        graph_seed_names = self._extract_graph_seed_names(retrieval_query)
+        t_seed = time.monotonic()
+        graph_seed_names = await self.resolve_graph_seed_names(retrieval_query)
+        graph_seed_source = self._last_graph_seed_source
+        graph_seed_strategy = self._last_graph_seed_strategy
+        _s("graph_seed", True, (time.monotonic() - t_seed) * 1000,
+           seed_names=graph_seed_names,
+           seed_count=len(graph_seed_names),
+           seed_source=graph_seed_source,
+           seed_strategy=graph_seed_strategy)
 
         t_vec = time.monotonic()
-        ns_tasks = [
-            self._retrieve_one_namespace(
-                retrieval_embedding, retrieval_query, ns, req.top_k, req.use_graph, graph_seed_names
+        vec_tasks = [
+            self._vector_store.search(
+                retrieval_embedding, top_k=req.top_k, namespace=ns
             )
             for ns in req.effective_namespaces
         ]
-        ns_results = await asyncio.gather(*ns_tasks, return_exceptions=True)
+        vec_results = await asyncio.gather(*vec_tasks, return_exceptions=True)
         vec_ms = (time.monotonic() - t_vec) * 1000
 
         all_vector_lists: List[List[RerankedResult]] = []
-        all_graph_entities_raw: list = []
-        for ns, res in zip(req.effective_namespaces, ns_results):
+        for ns, res in zip(req.effective_namespaces, vec_results):
             if isinstance(res, Exception):
-                logger.error("Retrieval failed for namespace=%s: %s", ns, res)
+                logger.error("Vector retrieval failed for namespace=%s: %s", ns, res)
                 continue
-            vecs, ents = res
-            if vecs:
-                all_vector_lists.append(vecs)
-            all_graph_entities_raw.extend(ents)
+            if res:
+                all_vector_lists.append(res)
 
         # Cross-namespace vector RRF → top_k
         if len(all_vector_lists) > 1:
@@ -658,33 +907,65 @@ class QueryUseCase:
 
         _s("vector", True, vec_ms, result_count=len(vector_results))
 
-        # Convert graph entities to RerankedResult (deduplicated by name)
+        # Convert graph payload to RerankedResult (deduplicated by name)
         graph_results: List[RerankedResult] = []
         graph_entities: List[dict] = []
+        graph_summary_texts: List[str] = []
+        graph_relations: List[dict] = []
         graph_entity_texts: List[str] = []
+        graph_relation_texts: List[str] = []
+        graph_context_texts: List[str] = []
         seen_graph: set = set()
-        for i, entity in enumerate(all_graph_entities_raw):
-            payload = _graph_entity_payload(entity)
-            text = payload["name"]
-            if text in seen_graph:
-                continue
-            seen_graph.add(text)
-            graph_entities.append(payload)
-            graph_entity_texts.append(text)
-            graph_results.append(RerankedResult(
-                chunk_id=f"graph_{i}",
-                document_id="graph",
-                text=text,
-                score=1.0 / (i + 1),
-                original_rank=i,
-                reranked_rank=i,
-            ))
-
+        graph_ms = 0.0
         if req.use_graph and self._graph:
-            _s("graph", True, 0.0,
+            t_graph = time.monotonic()
+            graph_tasks = [
+                self._graph.query_related_entities(
+                    retrieval_query,
+                    top_k=req.top_k,
+                    namespace=ns,
+                    entity_names=graph_seed_names,
+                )
+                for ns in req.effective_namespaces
+            ]
+            graph_results_raw = await asyncio.gather(*graph_tasks, return_exceptions=True)
+            graph_ms = (time.monotonic() - t_graph) * 1000
+            for ns, res in zip(req.effective_namespaces, graph_results_raw):
+                if isinstance(res, Exception):
+                    logger.warning("Graph query failed for namespace=%s: %s", ns, res)
+                    continue
+                payload = res if isinstance(res, dict) else {"entities": [], "relations": [], "context_text": ""}
+                entities, relations, context_text = self._normalize_graph_payload(payload)
+                if context_text:
+                    graph_context_texts.append(context_text)
+                for entity in entities:
+                    text = entity.get("name", "")
+                    if not text or text in seen_graph:
+                        continue
+                    seen_graph.add(text)
+                    graph_entities.append(entity)
+                    entity_type = str(entity.get("type", "")).strip()
+                    graph_entity_texts.append(f"{text} ({entity_type})" if entity_type else text)
+                    graph_results.append(RerankedResult(
+                        chunk_id=f"graph_{len(graph_results)}",
+                        document_id="graph",
+                        text=text,
+                        score=1.0 / (len(graph_results) + 1),
+                        original_rank=len(graph_results),
+                        reranked_rank=len(graph_results),
+                    ))
+                graph_relations.extend(relations)
+
+            graph_relation_texts = self._graph_relation_lines(graph_relations)
+            graph_summary_texts = list(dict.fromkeys(graph_context_texts))
+
+            _s("graph", True, graph_ms,
                entity_count=len(graph_entity_texts),
+               relation_count=len(graph_relations),
                seed_names=graph_seed_names,
-               seed_count=len(graph_seed_names))
+               seed_count=len(graph_seed_names),
+               seed_source=graph_seed_source,
+               seed_strategy=graph_seed_strategy)
 
         # 6. RRF merge (vector + graph)
         all_lists = [r for r in [vector_results, graph_results] if r]
@@ -732,37 +1013,21 @@ class QueryUseCase:
            chunk_count=len(context.chunks), truncated=context.was_truncated)
 
         # 9. Compression (if over budget)
-        if context.was_truncated:
+        context_text = self._assemble_context_text(
+            retrieval_query,
+            context,
+            memory_context,
+            graph_entity_texts,
+            graph_relation_texts,
+            graph_context_texts,
+        )
+        if context.was_truncated or not isinstance(self._compressor, NoOpCompressor):
             compressed = await self._compressor.compress(
-                retrieval_query, context, max_tokens=req.max_context_tokens
+                retrieval_query,
+                self._compression_context_from_text(context_text, context.was_truncated),
+                max_tokens=req.max_context_tokens
             )
             context_text = compressed.text
-        else:
-            context_text = "\n\n".join(c.text for c in context.chunks)
-
-        # Inject memory context
-        if memory_context:
-            context_text = f"[User Memory]\n{memory_context}\n\n[Knowledge]\n{context_text}"
-
-        # Inject graph entities
-        if graph_entity_texts:
-            context_text += f"\n\n[Related Entities]\n{', '.join(graph_entity_texts)}"
-
-        # 9.5 Tool routing (optional ReAct loop)
-        tool_calls_made: list = []
-        if self._tool_router and req.use_tools:
-            try:
-                tool_calls_made = await self._tool_router.route(query, "")
-                if tool_calls_made:
-                    tool_results = "\n".join(
-                        f"[{tc.tool_name}] {tc.output}" for tc in tool_calls_made
-                    )
-                    context_text = f"[Tool Results]\n{tool_results}\n\n{context_text}"
-                    logger.info("Tool calls made: %s", [(tc.tool_name, tc.output) for tc in tool_calls_made])
-                else:
-                    logger.info("Tool router: no tools called")
-            except Exception as exc:
-                logger.warning("Tool router failed: %s", exc)
 
         # 10. Token quota check (before LLM call)
         client_id = self._resolve_client_id(req)
@@ -777,50 +1042,26 @@ class QueryUseCase:
                 tomorrow = date.today().isoformat()
                 raise QuotaExceededError(client_id=client_id, reset_at=f"{tomorrow}T00:00:00Z")
 
-        # 10. LLM generation
+        # 10. Retrieve-only answer assembly
         t_gen = time.monotonic()
-        kb_relevant = top_score >= self._policy.knowledge_gap_threshold
-        _DIRECT_TOOLS = {"direct_answer", "datetime", "calculator", "code_executor"}
-        direct_only = (
-            tool_calls_made
-            and len(tool_calls_made) == 1
-            and tool_calls_made[0].tool_name in _DIRECT_TOOLS
-            and not kb_relevant
-        )
-        if direct_only:
-            tc = tool_calls_made[0]
-            answer = str(tc.output)
-        elif not context.chunks and not tool_calls_made:
+        if not context_text.strip():
             answer = "I don't have enough information to answer this question."
         else:
-            if tool_calls_made and not kb_relevant:
-                gen_context = "\n".join(f"[{tc.tool_name}] {tc.output}" for tc in tool_calls_made)
-            else:
-                gen_context = context_text
-            prompt = _ANSWER_PROMPT.format(context=gen_context, query=query)
-            answer = await self._llm.generate(
-                prompt,
-                system_prompt=_ANSWER_SYSTEM_PROMPT,
-            )
+            answer = context_text
 
         if self._redis and client_id != "anonymous":
             output_tokens = len(answer.split())
             asyncio.create_task(self._record_token_usage(client_id, output_tokens))
 
-        generation_latency_ms = (time.monotonic() - t_gen) * 1000
-        _s("llm", True, generation_latency_ms,
-           answer_len=len(answer), from_tools=direct_only)
+        answer_latency_ms = (time.monotonic() - t_gen) * 1000
+        _s("answer", True, answer_latency_ms,
+           answer_len=len(answer))
 
         # 10.5 Citation verification / hallucination detection
         verification: Optional[CitationVerificationResult] = None
         if context.chunks and self._citation_verifier:
             verification = self._citation_verifier.verify(answer, reranked, query)
             if verification.low_confidence:
-                answer = (
-                    answer
-                    + f"\n\n[Note: This answer has low grounding confidence "
-                    f"({verification.grounding_score:.0%}) and may contain unsupported claims.]"
-                )
                 asyncio.create_task(
                     self._enqueue_low_confidence(request_id, query, answer,
                                                  verification.grounding_score)
@@ -845,12 +1086,13 @@ class QueryUseCase:
             answer=answer,
             citations=citations,
             graph_entities=graph_entities,
+            graph_summary_texts=graph_summary_texts,
             rewritten_query=intel.rewritten_query if intel.rewritten_query != query else None,
             hyde_used=intel.hyde_used,
             sub_queries=intel.sub_queries,
             from_cache=False,
             retrieval_latency_ms=retrieval_latency_ms,
-            generation_latency_ms=generation_latency_ms,
+            answer_latency_ms=answer_latency_ms,
             grounding_score=verification.grounding_score if verification else 1.0,
             low_confidence=verification.low_confidence if verification else False,
             stages=stages,
@@ -858,6 +1100,8 @@ class QueryUseCase:
             knowledge_gap=knowledge_gap,
             top_rerank_score=round(top_score, 4),
             graph_seed_names=graph_seed_names,
+            graph_seed_source=graph_seed_source,
+            graph_seed_strategy=graph_seed_strategy,
         )
 
         # 12. Cache result (only when KB has relevant answers)
@@ -883,7 +1127,7 @@ class QueryUseCase:
                 """INSERT INTO interaction_log
                    (request_id, query_text, answer_text, chunk_ids,
                     confidence_score, hyde_used, rewritten_query, sub_queries, grounding_score,
-                    retrieval_latency_ms, generation_latency_ms, total_latency_ms, from_cache)
+                    retrieval_latency_ms, answer_latency_ms, total_latency_ms, from_cache)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
                 result.request_id,
                 query,
@@ -895,7 +1139,7 @@ class QueryUseCase:
                 result.sub_queries or [],
                 result.grounding_score,
                 result.retrieval_latency_ms,
-                result.generation_latency_ms,
+                result.answer_latency_ms,
                 result.total_latency_ms,
                 result.from_cache,
             )
